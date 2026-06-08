@@ -25,10 +25,46 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _requestPermissions() async {
-    await Future.wait([
-      _requestCamera(),
-      _requestLocation(),
-    ]);
+    await _requestLocation();
+    await _requestCamera();
+  }
+
+  Future<void> _requestLocation() async {
+    try {
+      var permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever && mounted) {
+        _showPermissionDialog();
+      }
+    } catch (_) {}
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Permiso de ubicación'),
+        content: const Text(
+          'La app necesita acceso a la ubicación para funcionar. '
+          'Actívalo en los ajustes del sistema.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Geolocator.openAppSettings();
+            },
+            child: const Text('Abrir ajustes'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestCamera() async {
@@ -38,16 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final ctrl = CameraController(cameras.first, ResolutionPreset.low);
       await ctrl.initialize();
       await ctrl.dispose();
-    } catch (_) {}
-  }
-
-  Future<void> _requestLocation() async {
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        await Geolocator.requestPermission();
-      }
     } catch (_) {}
   }
 
