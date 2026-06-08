@@ -39,8 +39,7 @@ class ARViewScreen extends StatefulWidget {
   State<ARViewScreen> createState() => _ARViewScreenState();
 }
 
-class _ARViewScreenState extends State<ARViewScreen>
-    with SingleTickerProviderStateMixin {
+class _ARViewScreenState extends State<ARViewScreen> {
   List<CameraDescription>? _cameras;
   CameraController? _cameraController;
   final List<SavedObject> _objects = [];
@@ -51,51 +50,35 @@ class _ARViewScreenState extends State<ARViewScreen>
   bool _initialized = false;
   List<_ObjectWithDistance> _sortedObjects = [];
 
-  double _targetHeading = 0;
-  double _displayHeading = 0;
-  late final AnimationController _ticker;
+  final ValueNotifier<double> _headingNotifier = ValueNotifier(0);
 
   double _gz = 0;
   bool _hasGravity = false;
   double _smoothedTilt = 0;
-  double _arOpacity = 0;
-  double _radarOpacity = 1;
+  final ValueNotifier<double> _tiltNotifier = ValueNotifier(0);
   StreamSubscription? _accSub;
 
   @override
   void initState() {
     super.initState();
-    _ticker = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..addListener(_onTick);
-    _ticker.repeat();
     _accSub = accelerometerEventStream().listen((event) {
       final norm = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       if (norm > 0) {
         _gz = event.z / norm;
         _hasGravity = true;
+        final rawTilt = (1.0 - _gz.abs()).clamp(0.0, 1.0);
+        _smoothedTilt += (rawTilt - _smoothedTilt) * 0.06;
+        final arOpacity = ((_smoothedTilt - 0.15) / 0.45).clamp(0.0, 1.0);
+        if ((arOpacity - _tiltNotifier.value).abs() > 0.005) {
+          _tiltNotifier.value = arOpacity;
+        }
       }
     });
     _init();
   }
 
-  void _onTick() {
-    if (!mounted) return;
-    _displayHeading = _targetHeading;
-
-    if (_hasGravity) {
-      final rawTilt = (1.0 - _gz.abs()).clamp(0.0, 1.0);
-      _smoothedTilt += (rawTilt - _smoothedTilt) * 0.06;
-      _arOpacity = ((_smoothedTilt - 0.15) / 0.45).clamp(0.0, 1.0);
-      _radarOpacity = 1.0 - _arOpacity;
-    }
-
-    setState(() {});
-  }
-
   void _onHeading(double h) {
-    _targetHeading = h;
+    _headingNotifier.value = h;
   }
 
   Future<void> _init() async {
@@ -187,7 +170,8 @@ class _ARViewScreenState extends State<ARViewScreen>
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _headingNotifier.dispose();
+    _tiltNotifier.dispose();
     _accSub?.cancel();
     _cameraController?.dispose();
     _headingSub?.cancel();
@@ -207,7 +191,10 @@ class _ARViewScreenState extends State<ARViewScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('${_displayHeading.toStringAsFixed(0)}°'),
+        title: ValueListenableBuilder<double>(
+          valueListenable: _headingNotifier,
+          builder: (_, h, __) => Text('${h.toStringAsFixed(0)}°'),
+        ),
         backgroundColor: Colors.black54,
         foregroundColor: Colors.white,
         centerTitle: true,
@@ -215,37 +202,53 @@ class _ARViewScreenState extends State<ARViewScreen>
       body: Stack(
         children: [
           if (_currentPosition != null)
-            Opacity(
-              opacity: _radarOpacity.clamp(0.0, 1.0),
-              child: _buildRadarView(),
+            ValueListenableBuilder<double>(
+              valueListenable: _tiltNotifier,
+              builder: (_, arOpacity, __) {
+                final radarOpacity = 1.0 - arOpacity.clamp(0.0, 1.0);
+                return Opacity(
+                  opacity: radarOpacity,
+                  child: _buildRadarView(),
+                );
+              },
             ),
           if (_cameraController != null && _cameraController!.value.isInitialized)
-            Opacity(
-              opacity: _arOpacity.clamp(0.0, 1.0),
-              child: RepaintBoundary(
-                child: Stack(
-                  children: [
-                    CameraPreview(_cameraController!),
-                    if (_currentPosition != null)
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final topPad = MediaQuery.of(context).padding.top;
-                          return CustomPaint(
-                            size: Size(constraints.maxWidth, constraints.maxHeight),
-                            painter: ARPainter(
-                              objects: _objects,
-                              currentPosition: _currentPosition!,
-                              heading: _displayHeading,
-                              fov: 180,
-                              screenSize: Size(constraints.maxWidth, constraints.maxHeight),
-                              topPadding: topPad,
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
+            ValueListenableBuilder<double>(
+              valueListenable: _tiltNotifier,
+              builder: (_, arOpacity, __) {
+                return Opacity(
+                  opacity: arOpacity.clamp(0.0, 1.0),
+                  child: RepaintBoundary(
+                    child: Stack(
+                      children: [
+                        CameraPreview(_cameraController!),
+                        if (_currentPosition != null)
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final topPad = MediaQuery.of(context).padding.top;
+                              return ValueListenableBuilder<double>(
+                                valueListenable: _headingNotifier,
+                                builder: (_, heading, __) {
+                                  return CustomPaint(
+                                    size: Size(constraints.maxWidth, constraints.maxHeight),
+                                    painter: ARPainter(
+                                      objects: _objects,
+                                      currentPosition: _currentPosition!,
+                                      heading: heading,
+                                      fov: 180,
+                                      screenSize: Size(constraints.maxWidth, constraints.maxHeight),
+                                      topPadding: topPad,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           if (_currentPosition == null)
             const Center(
@@ -268,12 +271,17 @@ class _ARViewScreenState extends State<ARViewScreen>
   Widget _buildRadarView() {
     return Container(
       color: const Color(0xFF0D1117),
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: RadarPainter(
-          objects: _sortedObjects,
-          heading: _displayHeading,
-        ),
+      child: ValueListenableBuilder<double>(
+        valueListenable: _headingNotifier,
+        builder: (_, heading, __) {
+          return CustomPaint(
+            size: Size.infinite,
+            painter: RadarPainter(
+              objects: _sortedObjects,
+              heading: heading,
+            ),
+          );
+        },
       ),
     );
   }
@@ -474,5 +482,7 @@ class RadarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(RadarPainter oldDelegate) => true;
+  bool shouldRepaint(RadarPainter oldDelegate) {
+    return (oldDelegate.heading - heading).abs() > 0.5 || oldDelegate.objects != objects;
+  }
 }
