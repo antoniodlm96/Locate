@@ -22,7 +22,6 @@ class CompassService {
 
   int _lastGyroTime = 0;
   static const double _driftCorrection = 0.02;
-  static const double _magSmoothing = 0.3;
 
   Stream<double> get headingStream => _headingController.stream;
 
@@ -89,10 +88,22 @@ class CompassService {
     final myn = my / normM;
     final mzn = mz / normM;
 
-    // Compute magnetometer heading using rotation matrix (Y-axis azimuth)
-    final hy = mzn * gx - mxn * gz;
-    final my_ = myn - gy * (mxn * gx + myn * gy + mzn * gz);
-    var magHeading = atan2(hy, my_) * 180 / pi;
+    // Camera (-Z axis) heading - for vertical/AR mode
+    final camSin = myn * gx - mxn * gy;
+    final camCos = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
+
+    // Y-axis (top of phone) heading - for horizontal/radar mode
+    final ySin = mzn * gx - mxn * gz;
+    final yCos = myn - gy * (mxn * gx + myn * gy + mzn * gz);
+
+    // Blend based on tilt: gz² = 0 when vertical, = 1 when flat
+    final flatness = (gz * gz).clamp(0.0, 1.0);
+    final blend = flatness < 0.08 ? 0.0 : flatness > 0.85 ? 1.0 : flatness;
+
+    final sinDeg = camSin * (1 - blend) + ySin * blend;
+    final cosDeg = camCos * (1 - blend) + yCos * blend;
+
+    var magHeading = atan2(sinDeg, cosDeg) * 180 / pi;
     magHeading = (magHeading + 360) % 360;
 
     if (_heading < 0) {
