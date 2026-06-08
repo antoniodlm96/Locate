@@ -76,15 +76,20 @@ class CompassService {
     final myn = my / normM;
     final mzn = mz / normM;
 
-    final sinTerm = myn * gx - mxn * gy;
-    final cosTerm = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
+    // Camera direction (-Z axis) heading - reliable when phone is vertical
+    final camSin = myn * gx - mxn * gy;
+    final camCos = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
 
-    var sinDeg = sinTerm;
-    var cosDeg = cosTerm;
-    if (sinDeg * sinDeg + cosDeg * cosDeg < 0.001) {
-      sinDeg = mzn * gx - mxn * gz;
-      cosDeg = myn - gy * (mxn * gx + myn * gy + mzn * gz);
-    }
+    // Y-axis (top of phone) heading - reliable when phone is horizontal
+    final ySin = mzn * gx - mxn * gz;
+    final yCos = myn - gy * (mxn * gx + myn * gy + mzn * gz);
+
+    // Blend smoothly between camera and Y-axis based on tilt
+    // gz² = 0 when vertical, = 1 when flat (gravity parallel to -Z)
+    final blend = (gz * gz).clamp(0.0, 1.0);
+
+    var sinDeg = camSin * (1 - blend) + ySin * blend;
+    var cosDeg = camCos * (1 - blend) + yCos * blend;
 
     var rawHeading = atan2(sinDeg, cosDeg) * 180 / pi;
     rawHeading = (rawHeading + 360) % 360;
