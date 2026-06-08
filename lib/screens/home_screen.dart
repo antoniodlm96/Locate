@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:camera/camera.dart';
 import '../services/database_service.dart';
 import 'register_object_screen.dart';
 import 'ar_view_screen.dart';
@@ -18,13 +20,35 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _requestPermissions();
     _loadCount();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadCount();
+  Future<void> _requestPermissions() async {
+    await Future.wait([
+      _requestCamera(),
+      _requestLocation(),
+    ]);
+  }
+
+  Future<void> _requestCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      final ctrl = CameraController(cameras.first, ResolutionPreset.low);
+      await ctrl.initialize();
+      await ctrl.dispose();
+    } catch (_) {}
+  }
+
+  Future<void> _requestLocation() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        await Geolocator.requestPermission();
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadCount() async {

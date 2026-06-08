@@ -83,9 +83,13 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
         }
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      var pos = await Geolocator.getLastKnownPosition();
+      if (pos == null) {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+      }
       setState(() {
         _currentPosition = pos;
         _loading = false;

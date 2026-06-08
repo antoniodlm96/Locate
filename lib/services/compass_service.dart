@@ -12,6 +12,12 @@ class CompassService {
   bool _hasAcc = false;
   bool _hasMag = false;
 
+  double _filteredHeading = -1;
+  double _lastEmitted = -1;
+  static const double _smoothing = 0.08;
+  static const double _deadZone = 0.5;
+  DateTime _lastEmitTime = DateTime(2000);
+
   Stream<double> get headingStream => _headingController.stream;
 
   void start() {
@@ -38,21 +44,65 @@ class CompassService {
     final my = _mag[1];
     final mz = _mag[2];
 
-    final invSqrt = (ax * ax + ay * ay + az * az);
-    if (invSqrt == 0) return;
-    final inv = 1.0 / sqrt(invSqrt);
+    final normA = sqrt(ax * ax + ay * ay + az * az);
+    if (normA < 0.001) return;
+    final gx = ax / normA;
+    final gy = ay / normA;
+    final gz = az / normA;
 
-    final gx = ax * inv;
-    final gy = ay * inv;
-    final gz = az * inv;
+    final normM = sqrt(mx * mx + my * my + mz * mz);
+    if (normM < 0.001) return;
+    final mxn = mx / normM;
+    final myn = my / normM;
+    final mzn = mz / normM;
 
-    final hx = mx * (gz * gz + gy * gy) - mz * gx * gy - my * gx * gz;
-    final hy = my * (gz * gz + gx * gx) - mz * gy * gx - mx * gy * gz;
+    // Heading of the camera direction (back camera = -Z device axis)
+    // using rotation matrix: det(v,m,g) for sin, v·m - (v·g)(m·g) for cos
+    // v = camera direction = [0, 0, -1]
+    // sinTerm = myn*gx - mxn*gy = determinant(v, m, g)
+    // cosTerm = -mzn + gz*(mxn*gx + myn*gy + mzn*gz) = v·m - (v·g)(m·g)
+    final sinTerm = myn * gx - mxn * gy;
+    final cosTerm = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
 
-    var heading = atan2(hy, hx) * 180 / pi;
-    heading = (heading + 360) % 360;
+    // Fallback to Y-axis heading when camera direction is degenerate (phone flat)
+    var sinDeg = sinTerm;
+    var cosDeg = cosTerm;
+    if (sinDeg * sinDeg + cosDeg * cosDeg < 0.001) {
+      sinDeg = mzn * gx - mxn * gz;
+      cosDeg = myn - gy * (mxn * gx + myn * gy + mzn * gz);
+    }
 
-    _headingController.add(heading);
+    var rawHeading = atan2(sinDeg, cosDeg) * 180 / pi;
+    rawHeading = (rawHeading + 360) % 360;
+
+    if (_filteredHeading < 0) {
+      _filteredHeading = rawHeading;
+    } else {
+      var diff = rawHeading - _filteredHeading;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      _filteredHeading += diff * _smoothing;
+      if (_filteredHeading < 0) _filteredHeading += 360;
+      if (_filteredHeading >= 360) _filteredHeading -= 360;
+    }
+
+    if (_lastEmitted < 0) {
+      _lastEmitted = _filteredHeading;
+      _lastEmitTime = DateTime.now();
+      _headingController.add(_filteredHeading);
+      return;
+    }
+
+    if (DateTime.now().difference(_lastEmitTime).inMilliseconds < 50) return;
+
+    var emitDiff = _filteredHeading - _lastEmitted;
+    if (emitDiff > 180) emitDiff -= 360;
+    if (emitDiff < -180) emitDiff += 360;
+    if (emitDiff.abs() < _deadZone) return;
+
+    _lastEmitted = _filteredHeading;
+    _lastEmitTime = DateTime.now();
+    _headingController.add(_filteredHeading);
   }
 
   void stop() {

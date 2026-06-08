@@ -20,7 +20,7 @@ class _MapScreenState extends State<MapScreen> {
   List<SavedObject> _objects = [];
   Position? _currentPosition;
   bool _loading = true;
-  LatLng? _tapPosition;
+  bool _mapReady = false;
 
   @override
   void initState() {
@@ -29,15 +29,20 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
     try {
       final objects = await DatabaseService.instance.getAllObjects();
+
       Position? pos;
       try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-        );
+        pos = await Geolocator.getLastKnownPosition();
+        if (pos == null) {
+          pos = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 5),
+          );
+        }
       } catch (_) {}
+
       if (mounted) {
         setState(() {
           _objects = objects;
@@ -45,8 +50,9 @@ class _MapScreenState extends State<MapScreen> {
           _loading = false;
         });
         if (pos != null) {
-          _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
+          _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
         }
+        _mapReady = true;
       }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
@@ -56,7 +62,6 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _searchPlace() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
-
     try {
       final locations = await locationFromAddress(query);
       if (locations.isEmpty) {
@@ -68,7 +73,7 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
       final loc = locations.first;
-      _mapController.move(LatLng(loc.latitude, loc.longitude), 16);
+      _mapController.move(LatLng(loc.latitude, loc.longitude), 17);
       _searchController.clear();
     } catch (e) {
       if (mounted) {
@@ -86,7 +91,10 @@ class _MapScreenState extends State<MapScreen> {
         builder: (_) => RegisterObjectScreen(preselectedLatLng: pos),
       ),
     );
-    if (result == true) _load();
+    if (result == true) {
+      final objects = await DatabaseService.instance.getAllObjects();
+      if (mounted) setState(() => _objects = objects);
+    }
   }
 
   @override
@@ -135,96 +143,98 @@ class _MapScreenState extends State<MapScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Stack(
+          : FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _currentPosition != null
+                    ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+                    : const LatLng(40.4168, -3.7038),
+                initialZoom: _currentPosition != null ? 16 : 6,
+                onTap: (tapPos, latlng) => _addObjectAtTap(latlng),
+              ),
               children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _currentPosition != null
-                        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-                        : const LatLng(40.4168, -3.7038),
-                    initialZoom: 5,
-                    onTap: (tapPos, latlng) {
-                      setState(() => _tapPosition = latlng);
-                      _addObjectAtTap(latlng);
-                    },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.antonio.locate',
-                    ),
-                    if (_currentPosition != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(
-                              _currentPosition!.latitude,
-                              _currentPosition!.longitude,
-                            ),
-                            width: 40,
-                            height: 40,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: const Icon(Icons.my_location, color: Colors.white, size: 20),
-                            ),
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.antonio.locate',
+                  maxZoom: 19,
+                ),
+                if (_currentPosition != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(
+                          _currentPosition!.latitude,
+                          _currentPosition!.longitude,
+                        ),
+                        width: 40,
+                        height: 40,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                        ],
+                          child: const Icon(Icons.my_location, color: Colors.white, size: 20),
+                        ),
                       ),
-                    MarkerLayer(
-                      markers: _objects.map((obj) {
-                        final typeEntry = objectTypes.cast<Map<String, dynamic>?>().firstWhere(
-                          (t) => t?['name'] == obj.type,
-                          orElse: () => null,
-                        );
-                        final color = typeEntry?['color'] as Color? ?? Colors.grey;
-                        final icon = typeEntry?['icon'] as IconData? ?? Icons.place;
-
-                        return Marker(
-                          point: LatLng(obj.latitude, obj.longitude),
-                          width: 90,
-                          height: 50,
-                          child: GestureDetector(
-                            onTap: () => _showObjectInfo(obj),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black87,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    obj.name,
-                                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: obj.isActive ? color : color.withOpacity(0.4),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
-                                  ),
-                                  child: Icon(icon, color: Colors.white, size: 16),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: _buildMarkers(),
                 ),
               ],
             ),
     );
+  }
+
+  List<Marker> _buildMarkers() {
+    return _objects.map((obj) {
+      final typeEntry = _findTypeEntry(obj.type);
+      final color = typeEntry?['color'] as Color? ?? Colors.grey;
+      final icon = typeEntry?['icon'] as IconData? ?? Icons.place;
+
+      return Marker(
+        point: LatLng(obj.latitude, obj.longitude),
+        width: 90,
+        height: 50,
+        child: GestureDetector(
+          onTap: () => _showObjectInfo(obj),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  obj.name,
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: obj.isActive ? color : color.withOpacity(0.4),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Icon(icon, color: Colors.white, size: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Map<String, dynamic>? _findTypeEntry(String type) {
+    for (final t in objectTypes) {
+      if (t['name'] == type) return t;
+    }
+    return null;
   }
 
   void _showObjectInfo(SavedObject obj) {
@@ -237,10 +247,7 @@ class _MapScreenState extends State<MapScreen> {
       distText = _formatDistance(dist);
     }
 
-    final typeEntry = objectTypes.cast<Map<String, dynamic>?>().firstWhere(
-      (t) => t?['name'] == obj.type,
-      orElse: () => null,
-    );
+    final typeEntry = _findTypeEntry(obj.type);
     final color = typeEntry?['color'] as Color? ?? Colors.grey;
     final icon = typeEntry?['icon'] as IconData? ?? Icons.place;
 
@@ -269,14 +276,9 @@ class _MapScreenState extends State<MapScreen> {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                if (!obj.isActive)
-                  Text('Desactivado en RA',
-                    style: TextStyle(color: Colors.orange.shade700, fontSize: 12)),
-              ],
-            ),
+            if (!obj.isActive)
+              Text('Desactivado en RA',
+                style: TextStyle(color: Colors.orange.shade700, fontSize: 12)),
           ],
         ),
       ),

@@ -23,26 +23,18 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
     try {
       final objects = await DatabaseService.instance.getAllObjects();
       Position? pos;
       try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-        );
-      } catch (_) {}
-
-      final activePerm = await Geolocator.checkPermission();
-      if (activePerm == LocationPermission.denied) {
-        final req = await Geolocator.requestPermission();
-        if (req == LocationPermission.whileInUse ||
-            req == LocationPermission.always) {
+        pos = await Geolocator.getLastKnownPosition();
+        if (pos == null) {
           pos = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.medium,
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 4),
           );
         }
-      }
+      } catch (_) {}
 
       if (mounted) {
         setState(() {
@@ -54,6 +46,13 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Map<String, dynamic>? _findTypeEntry(String type) {
+    for (final t in objectTypes) {
+      if (t['name'] == type) return t;
+    }
+    return null;
   }
 
   Future<void> _rename(SavedObject obj) async {
@@ -82,16 +81,20 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
 
     if (newName != null && newName.isNotEmpty && newName != obj.name) {
       await DatabaseService.instance.updateObjectName(obj.id!, newName);
-      _load();
+      setState(() {
+        final idx = _objects.indexWhere((o) => o.id == obj.id);
+        if (idx != -1) _objects[idx] = obj.copyWith(name: newName);
+      });
     }
   }
 
   Future<void> _toggleActive(SavedObject obj) async {
-    await DatabaseService.instance.updateObjectActive(
-      obj.id!,
-      !obj.isActive,
-    );
-    _load();
+    final newActive = !obj.isActive;
+    await DatabaseService.instance.updateObjectActive(obj.id!, newActive);
+    setState(() {
+      final idx = _objects.indexWhere((o) => o.id == obj.id);
+      if (idx != -1) _objects[idx] = obj.copyWith(isActive: newActive);
+    });
   }
 
   Future<void> _delete(SavedObject obj) async {
@@ -116,7 +119,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
 
     if (confirm == true) {
       await DatabaseService.instance.deleteObject(obj.id!);
-      _load();
+      setState(() => _objects.removeWhere((o) => o.id == obj.id));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -165,10 +168,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                   itemCount: _objects.length,
                   itemBuilder: (context, index) {
                     final obj = _objects[index];
-                    final typeEntry = objectTypes.cast<Map<String, dynamic>?>().firstWhere(
-                      (t) => t?['name'] == obj.type,
-                      orElse: () => null,
-                    );
+                    final typeEntry = _findTypeEntry(obj.type);
                     final color = typeEntry?['color'] as Color? ?? Colors.grey;
                     final icon = typeEntry?['icon'] as IconData? ?? Icons.place;
 
@@ -200,7 +200,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                         ),
                         subtitle: Text(
                           distanceText ?? 'Sin ubicación',
-                          style: TextStyle(fontSize: 12),
+                          style: const TextStyle(fontSize: 12),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
