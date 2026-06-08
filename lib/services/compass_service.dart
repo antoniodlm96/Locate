@@ -6,31 +6,51 @@ class CompassService {
   final _headingController = StreamController<double>.broadcast();
   StreamSubscription? _accSub;
   StreamSubscription? _magSub;
+  StreamSubscription? _gyroSub;
 
   List<double> _acc = [0, 0, 9.8];
   List<double> _mag = [0, 0, 0];
   bool _hasAcc = false;
   bool _hasMag = false;
+  bool _hasGyro = false;
 
   double _filteredHeading = -1;
   double _lastEmitted = -1;
-  static const double _smoothing = 0.3;
+  double _currentSmoothing = 0.3;
   static const double _deadZone = 0.5;
   DateTime _lastEmitTime = DateTime(2000);
+
+  static const double _gyroQuietThreshold = 0.4;
+  static const double _gyroMovingThreshold = 1.0;
+  static const double _smoothingQuiet = 0.04;
+  static const double _smoothingMoving = 0.7;
+  static const double _smoothingFast = 1.0;
 
   Stream<double> get headingStream => _headingController.stream;
 
   void start() {
-    _accSub = accelerometerEventStream().listen((event) {
+    _accSub = accelerometerEventStream(samplingPeriod: SensorInterval.uiInterval).listen((event) {
       _acc = [event.x, event.y, event.z];
       _hasAcc = true;
       _tryComputeHeading();
     });
 
-    _magSub = magnetometerEventStream().listen((event) {
+    _magSub = magnetometerEventStream(samplingPeriod: SensorInterval.uiInterval).listen((event) {
       _mag = [event.x, event.y, event.z];
       _hasMag = true;
       _tryComputeHeading();
+    });
+
+    _gyroSub = gyroscopeEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
+      final mag = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+      _hasGyro = true;
+      if (mag > _gyroMovingThreshold) {
+        _currentSmoothing = _smoothingFast;
+      } else if (mag > _gyroQuietThreshold) {
+        _currentSmoothing = _smoothingMoving;
+      } else {
+        _currentSmoothing = _smoothingQuiet;
+      }
     });
   }
 
@@ -56,15 +76,9 @@ class CompassService {
     final myn = my / normM;
     final mzn = mz / normM;
 
-    // Heading of the camera direction (back camera = -Z device axis)
-    // using rotation matrix: det(v,m,g) for sin, v·m - (v·g)(m·g) for cos
-    // v = camera direction = [0, 0, -1]
-    // sinTerm = myn*gx - mxn*gy = determinant(v, m, g)
-    // cosTerm = -mzn + gz*(mxn*gx + myn*gy + mzn*gz) = v·m - (v·g)(m·g)
     final sinTerm = myn * gx - mxn * gy;
     final cosTerm = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
 
-    // Fallback to Y-axis heading when camera direction is degenerate (phone flat)
     var sinDeg = sinTerm;
     var cosDeg = cosTerm;
     if (sinDeg * sinDeg + cosDeg * cosDeg < 0.001) {
@@ -81,7 +95,7 @@ class CompassService {
       var diff = rawHeading - _filteredHeading;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      _filteredHeading += diff * _smoothing;
+      _filteredHeading += diff * _currentSmoothing;
       if (_filteredHeading < 0) _filteredHeading += 360;
       if (_filteredHeading >= 360) _filteredHeading -= 360;
     }
@@ -108,6 +122,7 @@ class CompassService {
   void stop() {
     _accSub?.cancel();
     _magSub?.cancel();
+    _gyroSub?.cancel();
     _headingController.close();
   }
 }
