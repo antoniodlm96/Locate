@@ -432,11 +432,6 @@ class RadarPainter extends CustomPainter {
     final maxDist = objects.map((o) => o.distance).reduce(math.max);
     final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
 
-    if (maxDist > 0) {
-      _drawText(canvas, '${radarMax.round()}m', center.dx, center.dy - radius - 30,
-          fontSize: 11, color: Colors.white38);
-    }
-
     for (final obj in objects) {
       final angleDiff = obj.bearing - heading;
       final angleRad = angleDiff * math.pi / 180;
