@@ -128,8 +128,7 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${obj.name} guardado en la ubicación actual'),
-          behavior: SnackBarBehavior.floating,
+          content: Text('${obj.name} guardado'),
         ),
       );
     }
@@ -143,7 +142,7 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Registrar Objeto')),
       body: _loading
@@ -153,9 +152,11 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      Icon(Icons.location_off, size: 64, color: cs.error),
+                      const SizedBox(height: 16),
                       const Text('No se pudo obtener la ubicación'),
                       const SizedBox(height: 16),
-                      ElevatedButton(
+                      FilledButton(
                         onPressed: _getLocation,
                         child: const Text('Reintentar'),
                       ),
@@ -163,43 +164,55 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Ubicación actual:',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_currentPosition!.latitude.toStringAsFixed(6)}, '
-                        '${_currentPosition!.longitude.toStringAsFixed(6)}',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontFamily: 'monospace',
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on, color: cs.primary, size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Ubicación', style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.5))),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_currentPosition!.latitude.toStringAsFixed(6)}, '
+                                      '${_currentPosition!.longitude.toStringAsFixed(6)}',
+                                      style: TextStyle(fontSize: 14, fontFamily: 'monospace', color: cs.onSurface),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 16),
                       TextField(
                         controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Nombre personalizado',
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre',
                           hintText: 'Ej: Casa de la abuela',
-                          prefixIcon: const Icon(Icons.edit),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerLow,
+                          prefixIcon: Icon(Icons.edit),
                         ),
                         textCapitalization: TextCapitalization.words,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       Text(
-                        '¿Qué quieres guardar?',
-                        style: theme.textTheme.titleLarge,
+                        'Tipo',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: GridView.builder(
                           gridDelegate:
@@ -214,17 +227,18 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                             final isSelected = _selectedType == type['name'];
                             return GestureDetector(
                               onTap: () => setState(() => _selectedType = type['name'] as String),
-                              child: Container(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? type['color'] as Color
-                                      : (type['color'] as Color).withOpacity(0.15),
+                                      : cs.surfaceContainerLow,
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: isSelected
                                         ? type['color'] as Color
-                                        : (type['color'] as Color).withOpacity(0.3),
-                                    width: 2,
+                                        : cs.outline.withOpacity(0.2),
+                                    width: isSelected ? 2 : 1,
                                   ),
                                 ),
                                 child: Column(
@@ -232,18 +246,23 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                                   children: [
                                     Icon(
                                       type['icon'] as IconData,
-                                      size: 44,
+                                      size: 38,
                                       color: isSelected ? Colors.white : type['color'] as Color,
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      type['name'] as String,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                        color: isSelected ? Colors.white : null,
+                                    const SizedBox(height: 4),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      child: Text(
+                                        type['name'] as String,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                          color: isSelected ? Colors.white : cs.onSurface.withOpacity(0.7),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      textAlign: TextAlign.center,
                                     ),
                                   ],
                                 ),
@@ -255,13 +274,11 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
-                        height: 60,
-                        child: ElevatedButton(
+                        height: 56,
+                        child: FilledButton.icon(
                           onPressed: _selectedType != null ? _save : null,
-                          child: const Text(
-                            'Guardar en esta ubicación',
-                            style: TextStyle(fontSize: 18),
-                          ),
+                          icon: const Icon(Icons.save, size: 22),
+                          label: const Text('Guardar'),
                         ),
                       ),
                     ],

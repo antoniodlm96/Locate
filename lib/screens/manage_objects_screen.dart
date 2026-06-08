@@ -60,18 +60,21 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Renombrar objeto'),
+        title: const Text('Renombrar'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Nuevo nombre'),
+          decoration: const InputDecoration(
+            labelText: 'Nuevo nombre',
+            prefixIcon: Icon(Icons.edit),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('Guardar'),
           ),
@@ -108,9 +111,9 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancelar'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Eliminar'),
           ),
         ],
@@ -122,10 +125,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
       setState(() => _objects.removeWhere((o) => o.id == obj.id));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${obj.name}" eliminado'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('"${obj.name}" eliminado')),
         );
       }
     }
@@ -133,7 +133,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Gestionar Objetos')),
       body: _loading
@@ -143,28 +143,28 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inbox, size: 80, color: theme.colorScheme.outline),
+                      Icon(Icons.inbox, size: 80, color: cs.outline),
                       const SizedBox(height: 16),
                       Text(
                         'No hay objetos guardados',
-                        style: theme.textTheme.titleMedium,
+                        style: TextStyle(fontSize: 18, color: cs.onSurface.withOpacity(0.6)),
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
                         onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const RegisterObjectScreen(),
                           ),
                         ).then((_) => _load()),
-                        icon: const Icon(Icons.add, size: 28),
-                        label: const Text('Registrar primero', style: TextStyle(fontSize: 18)),
+                        icon: const Icon(Icons.add, size: 22),
+                        label: const Text('Registrar primero'),
                       ),
                     ],
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: _objects.length,
                   itemBuilder: (context, index) {
                     final obj = _objects[index];
@@ -183,43 +183,68 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                       distanceText = _formatDistance(dist);
                     }
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      color: obj.isActive ? null : theme.colorScheme.surfaceContainerLow,
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: obj.isActive ? color : color.withOpacity(0.3),
-                          child: Icon(icon, color: Colors.white),
-                        ),
-                        title: Text(
-                          obj.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: obj.isActive ? null : theme.colorScheme.onSurface.withOpacity(0.5),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Card(
+                        color: obj.isActive ? null : cs.surfaceContainerLow,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: obj.isActive
+                                      ? color.withOpacity(0.2)
+                                      : color.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Icon(icon, color: obj.isActive ? color : color.withOpacity(0.4), size: 26),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      obj.name,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: obj.isActive ? cs.onSurface : cs.onSurface.withOpacity(0.4),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      distanceText ?? 'Sin ubicación',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: obj.isActive
+                                            ? cs.onSurface.withOpacity(0.5)
+                                            : cs.onSurface.withOpacity(0.3),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.edit, size: 22),
+                                onPressed: () => _rename(obj),
+                                color: cs.onSurface.withOpacity(0.5),
+                                tooltip: 'Renombrar',
+                              ),
+                              Switch(
+                                value: obj.isActive,
+                                onChanged: (_) => _toggleActive(obj),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.delete, size: 22, color: Colors.red.withOpacity(0.7)),
+                                onPressed: () => _delete(obj),
+                                tooltip: 'Eliminar',
+                              ),
+                            ],
                           ),
-                        ),
-                          subtitle: Text(
-                            distanceText ?? 'Sin ubicación',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, size: 24),
-                              onPressed: () => _rename(obj),
-                              tooltip: 'Renombrar',
-                            ),
-                            Switch(
-                              value: obj.isActive,
-                              onChanged: (_) => _toggleActive(obj),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, size: 24, color: Colors.red),
-                              onPressed: () => _delete(obj),
-                              tooltip: 'Eliminar',
-                            ),
-                          ],
                         ),
                       ),
                     );

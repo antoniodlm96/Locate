@@ -363,8 +363,8 @@ class RadarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.42);
-    final radius = math.min(size.width, size.height) * 0.35;
+    final center = Offset(size.width / 2, size.height * 0.45);
+    final radius = math.min(size.width, size.height) * 0.42;
 
     final bgPaint = Paint()..color = const Color(0xFF0D1117);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
@@ -399,16 +399,16 @@ class RadarPainter extends CustomPainter {
       final angleRad = entry.value * math.pi / 180;
       final lx = center.dx + (radius + 18) * math.sin(angleRad);
       final ly = center.dy - (radius + 18) * math.cos(angleRad);
-      _drawText(canvas, entry.key, lx, ly, fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white60);
+      _drawText(canvas, entry.key, lx, ly, fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white70);
     }
 
     final headPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
     final headPath = Path()
-      ..moveTo(center.dx, center.dy - radius - 8)
-      ..lineTo(center.dx - 7, center.dy - radius + 4)
-      ..lineTo(center.dx + 7, center.dy - radius + 4)
+      ..moveTo(center.dx, center.dy - radius - 10)
+      ..lineTo(center.dx - 9, center.dy - radius + 5)
+      ..lineTo(center.dx + 9, center.dy - radius + 5)
       ..close();
     canvas.drawPath(headPath, headPaint);
 
@@ -424,8 +424,8 @@ class RadarPainter extends CustomPainter {
     canvas.drawCircle(center, 3, Paint()..color = Colors.white70);
 
     if (objects.isEmpty) {
-      _drawText(canvas, 'Sin objetos cerca', center.dx, center.dy + 30,
-          fontSize: 14, color: Colors.white38);
+      _drawText(canvas, 'Sin objetos cerca', center.dx, center.dy + 35,
+          fontSize: 16, color: Colors.white38);
       return;
     }
 
@@ -433,8 +433,8 @@ class RadarPainter extends CustomPainter {
     final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
 
     if (maxDist > 0) {
-      _drawText(canvas, '${radarMax.round()}m', center.dx, center.dy - radius - 26,
-          fontSize: 10, color: Colors.white38);
+      _drawText(canvas, '${radarMax.round()}m', center.dx, center.dy - radius - 30,
+          fontSize: 11, color: Colors.white38);
     }
 
     for (final obj in objects) {
@@ -446,13 +446,17 @@ class RadarPainter extends CustomPainter {
       final ox = center.dx + objR * math.sin(angleRad);
       final oy = center.dy - objR * math.cos(angleRad);
 
-      canvas.drawCircle(Offset(ox, oy), 5, Paint()..color = obj.color);
+      canvas.drawCircle(Offset(ox, oy), 7, Paint()..color = obj.color);
+      canvas.drawCircle(Offset(ox, oy), 7, Paint()
+        ..color = Colors.white.withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5);
 
-      final labelOffset = (objR < radius * 0.3) ? const Offset(10, -8) : const Offset(8, -6);
+      final labelOffset = (objR < radius * 0.3) ? const Offset(12, -10) : const Offset(10, -8);
       _drawText(canvas, obj.object.name, ox + labelOffset.dx, oy + labelOffset.dy,
-          fontSize: 11, fontWeight: FontWeight.w600, color: obj.color);
-      _drawText(canvas, formatDistance(obj.distance), ox + labelOffset.dx, oy + labelOffset.dy + 14,
-          fontSize: 10, color: Colors.white70);
+          fontSize: 13, fontWeight: FontWeight.w600, color: obj.color);
+      _drawText(canvas, formatDistance(obj.distance), ox + labelOffset.dx, oy + labelOffset.dy + 16,
+          fontSize: 11, color: Colors.white70);
     }
   }
 

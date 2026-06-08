@@ -31,11 +31,17 @@ class ARPainter extends CustomPainter {
   }
 
   void _drawCompassStrip(Canvas canvas, Size size) {
-    final stripPaint = Paint()
-      ..color = Colors.black26
-      ..style = PaintingStyle.fill;
-    final stripTop = topPadding;
-    canvas.drawRect(Rect.fromLTWH(0, stripTop, size.width, 24), stripPaint);
+    final stripTop = topPadding + 4;
+
+    final bgPaint = Paint()
+      ..color = Colors.black26;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, stripTop, size.width, 28),
+        const Radius.circular(0),
+      ),
+      bgPaint,
+    );
 
     final tickPaint = Paint()
       ..color = Colors.white38
@@ -49,17 +55,22 @@ class ARPainter extends CustomPainter {
       d = _normalizeAngle(d);
       if (d.abs() > 90) continue;
       final x = size.width / 2 + (d / 90) * (size.width / 2);
-      canvas.drawLine(Offset(x, stripTop + 18), Offset(x, stripTop + 24), tickPaint);
-      _drawText(canvas, entry.key, x, stripTop + 2, fontSize: 9, color: Colors.white54);
+      canvas.drawLine(Offset(x, stripTop + 20), Offset(x, stripTop + 28), tickPaint);
+      _drawText(canvas, entry.key, x, stripTop + 3, fontSize: 9, color: Colors.white54);
     }
 
     final centerPaint = Paint()
       ..color = Colors.white
-      ..strokeWidth = 2;
+      ..strokeWidth = 2.5;
     canvas.drawLine(
-      Offset(size.width / 2, stripTop + 16),
-      Offset(size.width / 2, stripTop + 24),
+      Offset(size.width / 2, stripTop + 18),
+      Offset(size.width / 2, stripTop + 28),
       centerPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width / 2, stripTop + 14),
+      Offset(size.width / 2, stripTop + 18),
+      Paint()..color = Colors.white.withOpacity(0.4)..strokeWidth = 1,
     );
   }
 
@@ -111,11 +122,20 @@ class ARPainter extends CustomPainter {
     final iconSize = _iconSizeForDistance(distance);
     final scaledIconSize = iconSize * (0.7 + 0.3 * opacity);
 
-    final bgPaint = Paint()..color = color.withOpacity(0.7 * opacity);
+    final bgPaint = Paint()..color = color.withOpacity(0.65 * opacity);
     canvas.drawCircle(
       Offset(x, centerY),
-      scaledIconSize / 2 + 4,
+      scaledIconSize / 2 + 5,
       bgPaint,
+    );
+
+    canvas.drawCircle(
+      Offset(x, centerY),
+      scaledIconSize / 2 + 5,
+      Paint()
+        ..color = Colors.white.withOpacity(0.2 * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
     );
 
     final iconPainter = TextPainter(
@@ -136,7 +156,7 @@ class ARPainter extends CustomPainter {
     );
 
     final textOpacity = opacity;
-    final labelY = centerY + scaledIconSize / 2 + 6;
+    final labelY = centerY + scaledIconSize / 2 + 8;
     _drawText(
       canvas, obj.name, x, labelY,
       fontWeight: FontWeight.bold,
@@ -151,13 +171,21 @@ class ARPainter extends CustomPainter {
   }
 
   void _drawEdgeDot(Canvas canvas, double angleDiff, Color color, double distance) {
-    final x = angleDiff < 0 ? 8.0 : screenSize.width - 8.0;
+    final x = angleDiff < 0 ? 10.0 : screenSize.width - 10.0;
     final centerY = screenSize.height * 0.38;
 
     canvas.drawCircle(
       Offset(x, centerY),
-      5,
-      Paint()..color = color,
+      6,
+      Paint()..color = color.withOpacity(0.7),
+    );
+    canvas.drawCircle(
+      Offset(x, centerY),
+      6,
+      Paint()
+        ..color = Colors.white.withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
     );
 
     final arrowIcon = angleDiff < 0 ? Icons.chevron_left : Icons.chevron_right;
@@ -165,7 +193,7 @@ class ARPainter extends CustomPainter {
       text: TextSpan(
         text: String.fromCharCode(arrowIcon.codePoint),
         style: TextStyle(
-          fontSize: 14,
+          fontSize: 16,
           color: color,
           fontFamily: arrowIcon.fontFamily,
         ),
@@ -175,12 +203,12 @@ class ARPainter extends CustomPainter {
     arrowPainter.layout();
     arrowPainter.paint(
       canvas,
-      Offset(x - arrowPainter.width / 2, centerY - arrowPainter.height / 2),
+      Offset(x - arrowPainter.width / 2, centerY - arrowPainter.height / 2 - 10),
     );
 
     _drawText(
-      canvas, _formatDistance(distance), x, centerY + 12,
-      fontSize: 9,
+      canvas, _formatDistance(distance), x, centerY + 14,
+      fontSize: 10,
       color: color.withOpacity(0.8),
     );
   }
@@ -195,7 +223,7 @@ class ARPainter extends CustomPainter {
           fontSize: fontSize,
           fontWeight: fontWeight,
           shadows: const [
-            Shadow(blurRadius: 4, color: Colors.black87),
+            Shadow(blurRadius: 5, color: Color(0xAA000000)),
           ],
         ),
       ),
@@ -235,10 +263,10 @@ class ARPainter extends CustomPainter {
   double _toDegrees(double radians) => radians * 180 / math.pi;
 
   double _iconSizeForDistance(double distance) {
-    if (distance < 10) return 48;
-    if (distance < 100) return 42;
-    if (distance < 500) return 36;
-    return 30;
+    if (distance < 10) return 50;
+    if (distance < 100) return 44;
+    if (distance < 500) return 38;
+    return 32;
   }
 
   String _formatDistance(double meters) {
