@@ -12,7 +12,6 @@ class CompassService {
   List<double> _mag = [0, 0, 0];
   bool _hasAcc = false;
   bool _hasMag = false;
-  bool _hasGyro = false;
 
   double _heading = -1;
   double _lastEmitted = -1;
@@ -39,7 +38,6 @@ class CompassService {
     });
 
     _gyroSub = gyroscopeEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
-      _hasGyro = true;
       if (_heading < 0) return;
 
       final now = DateTime.now().millisecondsSinceEpoch;

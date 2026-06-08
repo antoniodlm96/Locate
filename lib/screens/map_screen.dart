@@ -1,9 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/saved_object.dart';
+import '../models/object_group.dart';
 import '../services/database_service.dart';
 import 'register_object_screen.dart';
 
@@ -18,9 +20,9 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   List<SavedObject> _objects = [];
+  List<ObjectGroup> _groups = [];
   Position? _currentPosition;
   bool _loading = true;
-  bool _mapReady = false;
   String? _lastSearchQuery;
 
   @override
@@ -32,6 +34,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _load() async {
     try {
       final objects = await DatabaseService.instance.getAllObjects();
+      final groups = await DatabaseService.instance.getAllGroups();
 
       Position? pos;
       try {
@@ -47,13 +50,13 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           _objects = objects;
+          _groups = groups;
           _currentPosition = pos;
           _loading = false;
         });
         if (pos != null) {
           _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
         }
-        _mapReady = true;
       }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
@@ -163,6 +166,7 @@ class _MapScreenState extends State<MapScreen> {
                   userAgentPackageName: 'com.example.antonio.locate',
                   maxZoom: 19,
                 ),
+                ..._buildGroupLayers(),
                 if (_currentPosition != null)
                   MarkerLayer(
                     markers: [
@@ -200,33 +204,36 @@ class _MapScreenState extends State<MapScreen> {
 
       return Marker(
         point: LatLng(obj.latitude, obj.longitude),
-        width: 100,
-        height: 60,
+        width: 110,
+        height: 80,
         child: GestureDetector(
           onTap: () => _showObjectInfo(obj),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                constraints: const BoxConstraints(maxWidth: 100),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.black87,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   obj.name,
                   style: const TextStyle(color: Colors.white, fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: obj.isActive ? color : color.withOpacity(0.4),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(color: Colors.white, width: 2.5),
                 ),
-                child: Icon(icon, color: Colors.white, size: 20),
+                child: Icon(icon, color: Colors.white, size: 22),
               ),
             ],
           ),
@@ -240,6 +247,194 @@ class _MapScreenState extends State<MapScreen> {
       if (t['name'] == type) return t;
     }
     return null;
+  }
+
+  List<Widget> _buildGroupLayers() {
+    if (_groups.isEmpty || _currentPosition == null) return [];
+
+    final linePolylines = <Polyline>[];
+    final areaPolygons = <Polygon>[];
+    final markers = <Marker>[];
+
+    for (final group in _groups) {
+      final members = group.sortedObjects;
+      if (members.length < 2) continue;
+
+      final points = members.map((m) => LatLng(m.latitude, m.longitude)).toList();
+
+      if (group.type == 'line') {
+        linePolylines.add(Polyline(
+          points: points,
+          color: Colors.blue.withOpacity(0.5),
+          strokeWidth: 3,
+        ));
+
+        // Segment distance labels
+        for (int i = 0; i < points.length - 1; i++) {
+          final mid = LatLng(
+            (points[i].latitude + points[i + 1].latitude) / 2,
+            (points[i].longitude + points[i + 1].longitude) / 2,
+          );
+          final segDist = Geolocator.distanceBetween(
+            points[i].latitude, points[i].longitude,
+            points[i + 1].latitude, points[i + 1].longitude,
+          );
+          markers.add(Marker(
+            point: mid,
+            width: 60,
+            height: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _formatDistance(segDist),
+                style: const TextStyle(color: Colors.white, fontSize: 9),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ));
+        }
+      } else if (group.type == 'area' && members.length >= 3) {
+        areaPolygons.add(Polygon(
+          points: points,
+          color: Colors.green.withOpacity(0.12),
+          borderColor: Colors.green.withOpacity(0.6),
+          borderStrokeWidth: 2,
+        ));
+
+        final totalDist = _computePerimeter(points);
+        final centroid = _computeCentroid(points);
+        markers.add(Marker(
+          point: centroid,
+          width: 80,
+          height: 20,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              'P: ${_formatDistance(totalDist)}',
+              style: const TextStyle(color: Colors.white, fontSize: 9),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ));
+      }
+
+      // Group name label at centroid
+      final centroid = _computeCentroid(points);
+      final dist = Geolocator.distanceBetween(
+        _currentPosition!.latitude, _currentPosition!.longitude,
+        centroid.latitude, centroid.longitude,
+      );
+      final color = group.type == 'area' ? Colors.green : Colors.blue;
+      markers.add(Marker(
+        point: centroid,
+        width: 120,
+        height: 36,
+        child: GestureDetector(
+          onTap: () => _showGroupInfo(group, dist),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  group.name,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _formatDistance(dist),
+                  style: const TextStyle(color: Colors.white70, fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+    }
+
+    return [
+      if (linePolylines.isNotEmpty) PolylineLayer(polylines: linePolylines),
+      if (areaPolygons.isNotEmpty) PolygonLayer(polygons: areaPolygons),
+      if (markers.isNotEmpty) MarkerLayer(markers: markers),
+    ];
+  }
+
+  double _computePerimeter(List<LatLng> points) {
+    double total = 0;
+    for (int i = 0; i < points.length; i++) {
+      final next = (i + 1) % points.length;
+      total += Geolocator.distanceBetween(
+        points[i].latitude, points[i].longitude,
+        points[next].latitude, points[next].longitude,
+      );
+    }
+    return total;
+  }
+
+  LatLng _computeCentroid(List<LatLng> points) {
+    double lat = 0, lng = 0;
+    for (final p in points) {
+      lat += p.latitude;
+      lng += p.longitude;
+    }
+    return LatLng(lat / points.length, lng / points.length);
+  }
+
+  double _computeArea(List<LatLng> points) {
+    if (points.length < 3) return 0;
+    double area = 0;
+    final n = points.length;
+    for (int i = 0; i < n; i++) {
+      final j = (i + 1) % n;
+      area += points[i].latitude * points[j].longitude;
+      area -= points[j].latitude * points[i].longitude;
+    }
+    area = area.abs() / 2;
+    final double latCenter = points.map((p) => p.latitude).reduce((a, b) => a + b) / n;
+    final double metersPerDegree = 111320 * math.cos(latCenter * math.pi / 180);
+    return area * (metersPerDegree * metersPerDegree);
+  }
+
+  void _showGroupInfo(ObjectGroup group, double dist) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(group.type == 'area' ? Icons.change_history : Icons.route, color: Colors.blue),
+                const SizedBox(width: 12),
+                Text(group.name, style: Theme.of(context).textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('A ${_formatDistance(dist)}',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+            const SizedBox(height: 4),
+            Text('${group.type == 'area' ? 'Área' : 'Línea'} · ${group.members?.length ?? 0} objetos',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showObjectInfo(SavedObject obj) {

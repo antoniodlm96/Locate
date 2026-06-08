@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import '../models/saved_object.dart';
+import '../models/object_group.dart';
 import '../services/database_service.dart';
 
 const List<Map<String, dynamic>> objectTypes = [
@@ -122,14 +123,27 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
       longitude: _currentPosition!.longitude,
     );
 
-    await DatabaseService.instance.insertObject(obj);
+    final savedId = await DatabaseService.instance.insertObject(obj);
 
-    if (mounted) {
-      Navigator.pop(context, true);
+    if (mounted && savedId > 0) {
+      await _showGroupingDialog(savedId, obj.name);
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${obj.name} guardado')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showGroupingDialog(int savedId, String objName) async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => _GroupingSheet(savedId: savedId, objName: objName),
+    );
+    if (result == 'grouped' && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${obj.name} guardado'),
-        ),
+        const SnackBar(content: Text('Grupo creado correctamente')),
       );
     }
   }
@@ -285,5 +299,242 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                   ),
                 ),
     );
+  }
+}
+
+class _GroupingSheet extends StatefulWidget {
+  final int savedId;
+  final String objName;
+  const _GroupingSheet({required this.savedId, required this.objName});
+
+  @override
+  State<_GroupingSheet> createState() => _GroupingSheetState();
+}
+
+class _GroupingSheetState extends State<_GroupingSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '¿Agrupar "${widget.objName}" con otros objetos?',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: cs.onSurface),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Podrás crear rutas y áreas visibles en el mapa y RA.',
+            style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.6)),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _createNewGroup(),
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('Crear grupo nuevo'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _addToExistingGroup(),
+              icon: const Icon(Icons.playlist_add),
+              label: const Text('Añadir a grupo existente'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('No, gracias'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _createNewGroup() async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nombre del grupo'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Ej: Ruta al trabajo',
+            prefixIcon: Icon(Icons.edit),
+          ),
+          textCapitalization: TextCapitalization.sentences,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+
+    final db = DatabaseService.instance;
+    final groupId = await db.insertGroup(ObjectGroup(name: name, type: 'line'));
+    await db.addMemberToGroup(groupId, widget.savedId, 0);
+
+    if (!mounted) return;
+    final objects = await db.getActiveObjects();
+    final available = objects.where((o) => o.id != widget.savedId).toList();
+    if (available.isEmpty) {
+      Navigator.pop(context, 'grouped');
+      return;
+    }
+
+    final selected = await _showObjectPicker(available, db, groupId);
+    if (selected > 0) {
+      if (selected >= 3) {
+        final isArea = await _askLineOrArea();
+        if (mounted) {
+          await db.updateGroup(groupId, name, isArea ? 'area' : 'line');
+        }
+      }
+    }
+    if (mounted) Navigator.pop(context, 'grouped');
+  }
+
+  Future<void> _addToExistingGroup() async {
+    final db = DatabaseService.instance;
+    final groups = await db.getAllGroups();
+    if (!mounted || groups.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay grupos creados')),
+        );
+      }
+      return;
+    }
+
+    final group = await showDialog<ObjectGroup>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Seleccionar grupo'),
+        children: groups.map((g) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, g),
+            child: Row(
+              children: [
+                Icon(g.type == 'area' ? Icons.change_history : Icons.route, size: 24),
+                const SizedBox(width: 12),
+                Text(g.name),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (group != null) {
+      final nextIndex = (group.members?.length ?? 0);
+      await db.addMemberToGroup(group.id!, widget.savedId, nextIndex);
+      if (mounted) Navigator.pop(context, 'grouped');
+    }
+  }
+
+  Future<int> _showObjectPicker(List<SavedObject> objects, DatabaseService db, int groupId) async {
+    final selected = <int>{};
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Añadir objetos al grupo'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: ListView.builder(
+                itemCount: objects.length,
+                itemBuilder: (context, index) {
+                  final obj = objects[index];
+                  final isChecked = selected.contains(obj.id);
+                  return CheckboxListTile(
+                    value: isChecked,
+                    onChanged: (v) {
+                      setDialogState(() {
+                        if (v == true) {
+                          selected.add(obj.id!);
+                        } else {
+                          selected.remove(obj.id);
+                        }
+                      });
+                    },
+                    title: Text(obj.name),
+                    subtitle: Text(obj.type),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, -1),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, selected.length),
+                child: Text('Añadir (${selected.length})'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != null && result > 0) {
+      var orderIndex = (await db.getGroupMembers(groupId)).length;
+      for (final obj in objects) {
+        if (selected.contains(obj.id)) {
+          await db.addMemberToGroup(groupId, obj.id!, orderIndex++);
+        }
+      }
+    }
+    return result ?? 0;
+  }
+
+  Future<bool> _askLineOrArea() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tipo de grupo'),
+        content: const Text('¿Cómo quieres agrupar estos objetos?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'line'),
+            child: const Text('Línea (ruta)'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'area'),
+            child: const Text('Área (polígono)'),
+          ),
+        ],
+      ),
+    );
+    return result == 'area';
   }
 }
