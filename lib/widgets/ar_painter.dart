@@ -116,13 +116,13 @@ class ARPainter extends CustomPainter {
       opacity = 1.0;
     } else {
       opacity = 1.0 - ((absDiff - coreZone) / (fadeZone - coreZone));
-      opacity = opacity.clamp(0.15, 1.0);
+      opacity = opacity.clamp(0.3, 1.0);
     }
 
     final iconSize = _iconSizeForDistance(distance);
     final scaledIconSize = iconSize * (0.7 + 0.3 * opacity);
 
-    final bgPaint = Paint()..color = color.withOpacity(0.65 * opacity);
+    final bgPaint = Paint()..color = color.withOpacity(0.85 * opacity);
     canvas.drawCircle(
       Offset(x, centerY),
       scaledIconSize / 2 + 5,
@@ -133,7 +133,7 @@ class ARPainter extends CustomPainter {
       Offset(x, centerY),
       scaledIconSize / 2 + 5,
       Paint()
-        ..color = Colors.white.withOpacity(0.2 * opacity)
+        ..color = Colors.white.withOpacity(0.35 * opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
@@ -177,13 +177,13 @@ class ARPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, centerY),
       6,
-      Paint()..color = color.withOpacity(0.7),
+      Paint()..color = color.withOpacity(0.9),
     );
     canvas.drawCircle(
       Offset(x, centerY),
       6,
       Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = Colors.white.withOpacity(0.5)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );

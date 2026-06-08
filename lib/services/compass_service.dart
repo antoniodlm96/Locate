@@ -17,13 +17,15 @@ class CompassService {
   double _filteredHeading = -1;
   double _lastEmitted = -1;
   double _currentSmoothing = 0.3;
-  static const double _deadZone = 0.5;
+  double _smoothedGyroMag = 0;
+  static const double _deadZone = 0.8;
+  static const int _minIntervalMs = 80;
   DateTime _lastEmitTime = DateTime(2000);
 
-  static const double _gyroQuietThreshold = 0.4;
-  static const double _gyroMovingThreshold = 1.0;
+  static const double _gyroQuietThreshold = 0.6;
+  static const double _gyroMovingThreshold = 1.5;
   static const double _smoothingQuiet = 0.04;
-  static const double _smoothingMoving = 0.7;
+  static const double _smoothingMoving = 0.6;
   static const double _smoothingFast = 1.0;
 
   Stream<double> get headingStream => _headingController.stream;
@@ -44,9 +46,10 @@ class CompassService {
     _gyroSub = gyroscopeEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
       final mag = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       _hasGyro = true;
-      if (mag > _gyroMovingThreshold) {
+      _smoothedGyroMag += (mag - _smoothedGyroMag) * 0.12;
+      if (_smoothedGyroMag > _gyroMovingThreshold) {
         _currentSmoothing = _smoothingFast;
-      } else if (mag > _gyroQuietThreshold) {
+      } else if (_smoothedGyroMag > _gyroQuietThreshold) {
         _currentSmoothing = _smoothingMoving;
       } else {
         _currentSmoothing = _smoothingQuiet;
@@ -85,8 +88,13 @@ class CompassService {
     final yCos = myn - gy * (mxn * gx + myn * gy + mzn * gz);
 
     // Blend smoothly between camera and Y-axis based on tilt
-    // gz² = 0 when vertical, = 1 when flat (gravity parallel to -Z)
-    final blend = (gz * gz).clamp(0.0, 1.0);
+    final flatness = (gz * gz).clamp(0.0, 1.0);
+    // Lock to pure Y-axis when nearly flat, pure camera when nearly vertical
+    final blend = flatness < 0.08
+        ? 0.0
+        : flatness > 0.85
+            ? 1.0
+            : flatness;
 
     var sinDeg = camSin * (1 - blend) + ySin * blend;
     var cosDeg = camCos * (1 - blend) + yCos * blend;
@@ -112,7 +120,7 @@ class CompassService {
       return;
     }
 
-    if (DateTime.now().difference(_lastEmitTime).inMilliseconds < 50) return;
+    if (DateTime.now().difference(_lastEmitTime).inMilliseconds < _minIntervalMs) return;
 
     var emitDiff = _filteredHeading - _lastEmitted;
     if (emitDiff > 180) emitDiff -= 360;
