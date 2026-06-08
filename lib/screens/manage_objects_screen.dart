@@ -143,7 +143,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inbox, size: 64, color: theme.colorScheme.outline),
+                      Icon(Icons.inbox, size: 80, color: theme.colorScheme.outline),
                       const SizedBox(height: 16),
                       Text(
                         'No hay objetos guardados',
@@ -157,8 +157,8 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                             builder: (_) => const RegisterObjectScreen(),
                           ),
                         ).then((_) => _load()),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Registrar primero'),
+                        icon: const Icon(Icons.add, size: 28),
+                        label: const Text('Registrar primero', style: TextStyle(fontSize: 18)),
                       ),
                     ],
                   ),
@@ -198,15 +198,15 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                             color: obj.isActive ? null : theme.colorScheme.onSurface.withOpacity(0.5),
                           ),
                         ),
-                        subtitle: Text(
-                          distanceText ?? 'Sin ubicación',
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                          subtitle: Text(
+                            distanceText ?? 'Sin ubicación',
+                            style: const TextStyle(fontSize: 13),
+                          ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, size: 20),
+                              icon: const Icon(Icons.edit, size: 24),
                               onPressed: () => _rename(obj),
                               tooltip: 'Renombrar',
                             ),
@@ -215,7 +215,7 @@ class _ManageObjectsScreenState extends State<ManageObjectsScreen> {
                               onChanged: (_) => _toggleActive(obj),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                              icon: const Icon(Icons.delete, size: 24, color: Colors.red),
                               onPressed: () => _delete(obj),
                               tooltip: 'Eliminar',
                             ),

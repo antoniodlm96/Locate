@@ -149,26 +149,26 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Ubicación actual:',
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         '${_currentPosition!.latitude.toStringAsFixed(6)}, '
                         '${_currentPosition!.longitude.toStringAsFixed(6)}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: theme.textTheme.bodyLarge?.copyWith(
                           fontFamily: 'monospace',
                         ),
                       ),
                       const SizedBox(height: 24),
                       Text(
                         '¿Qué quieres guardar?',
-                        style: theme.textTheme.titleMedium,
+                        style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
                       Expanded(
@@ -176,8 +176,8 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 3,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
                           ),
                           itemCount: objectTypes.length,
                           itemBuilder: (context, index) {
@@ -203,14 +203,14 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                                   children: [
                                     Icon(
                                       type['icon'] as IconData,
-                                      size: 36,
+                                      size: 44,
                                       color: isSelected ? Colors.white : type['color'] as Color,
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Text(
                                       type['name'] as String,
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 14,
                                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                         color: isSelected ? Colors.white : null,
                                       ),
@@ -226,12 +226,12 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
-                        height: 56,
+                        height: 60,
                         child: ElevatedButton(
                           onPressed: _selectedType != null ? _save : null,
                           child: const Text(
                             'Guardar en esta ubicación',
-                            style: TextStyle(fontSize: 16),
+                            style: TextStyle(fontSize: 18),
                           ),
                         ),
                       ),

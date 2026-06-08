@@ -82,17 +82,7 @@ class _ARViewScreenState extends State<ARViewScreen>
 
   void _onTick() {
     if (!mounted) return;
-    var diff = _targetHeading - _displayHeading;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-
-    if (diff.abs() < 0.05) {
-      _displayHeading = _targetHeading;
-    } else {
-      _displayHeading += diff * 0.25;
-      if (_displayHeading < 0) _displayHeading += 360;
-      if (_displayHeading >= 360) _displayHeading -= 360;
-    }
+    _displayHeading = _targetHeading;
 
     if (_hasGravity) {
       final rawTilt = (1.0 - _gz.abs()).clamp(0.0, 1.0);
@@ -239,6 +229,7 @@ class _ARViewScreenState extends State<ARViewScreen>
                     if (_currentPosition != null)
                       LayoutBuilder(
                         builder: (context, constraints) {
+                          final topPad = MediaQuery.of(context).padding.top;
                           return CustomPaint(
                             size: Size(constraints.maxWidth, constraints.maxHeight),
                             painter: ARPainter(
@@ -247,20 +238,10 @@ class _ARViewScreenState extends State<ARViewScreen>
                               heading: _displayHeading,
                               fov: 180,
                               screenSize: Size(constraints.maxWidth, constraints.maxHeight),
+                              topPadding: topPad,
                             ),
                           );
                         },
-                      ),
-                    if (_currentPosition != null && _arOpacity > 0.3)
-                      Positioned(
-                        bottom: 120,
-                        left: 0,
-                        right: 0,
-                        height: 40,
-                        child: Opacity(
-                          opacity: ((_arOpacity - 0.3) / 0.7).clamp(0.0, 1.0),
-                          child: _buildCompassArc(),
-                        ),
                       ),
                   ],
                 ),
@@ -297,17 +278,6 @@ class _ARViewScreenState extends State<ARViewScreen>
     );
   }
 
-  Widget _buildCompassArc() {
-    if (_sortedObjects.isEmpty) return const SizedBox.shrink();
-    return CustomPaint(
-      size: const Size(double.infinity, 40),
-      painter: CompassArcPainter(
-        objects: _sortedObjects,
-        heading: _displayHeading,
-      ),
-    );
-  }
-
   Widget _buildBottomList() {
     if (_objects.isEmpty) {
       return Container(
@@ -329,7 +299,7 @@ class _ARViewScreenState extends State<ARViewScreen>
     }
 
     return Container(
-      height: 120,
+      height: 140,
       color: Colors.black54,
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -339,10 +309,10 @@ class _ARViewScreenState extends State<ARViewScreen>
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               'Objetos cercanos',
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Expanded(
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -351,7 +321,7 @@ class _ARViewScreenState extends State<ARViewScreen>
               itemBuilder: (context, index) {
                 final item = _sortedObjects[index];
                 return Container(
-                  width: 100,
+                  width: 120,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
                     color: item.color.withOpacity(0.2),
@@ -361,17 +331,17 @@ class _ARViewScreenState extends State<ARViewScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(item.icon, color: item.color, size: 24),
-                      const SizedBox(height: 2),
+                      Icon(item.icon, color: item.color, size: 28),
+                      const SizedBox(height: 4),
                       Text(
                         item.object.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         formatDistance(item.distance),
-                        style: TextStyle(color: item.color.withOpacity(0.8), fontSize: 10),
+                        style: TextStyle(color: item.color.withOpacity(0.8), fontSize: 11),
                       ),
                     ],
                   ),
@@ -383,55 +353,6 @@ class _ARViewScreenState extends State<ARViewScreen>
       ),
     );
   }
-}
-
-class CompassArcPainter extends CustomPainter {
-  final List<_ObjectWithDistance> objects;
-  final double heading;
-
-  CompassArcPainter({required this.objects, required this.heading});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (objects.isEmpty) return;
-    final center = Offset(size.width / 2, size.height + 5);
-    final radius = size.height * 1.5;
-    final arcPaint = Paint()
-      ..color = Colors.white24
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      math.pi,
-      math.pi,
-      false,
-      arcPaint,
-    );
-
-    final centerDot = Paint()..color = Colors.white70;
-    canvas.drawCircle(Offset(size.width / 2, size.height), 2, centerDot);
-
-    for (final obj in objects) {
-      var angleDiff = obj.bearing - heading;
-      while (angleDiff > 180) angleDiff -= 360;
-      while (angleDiff < -180) angleDiff += 360;
-
-      final angleRad = math.pi + angleDiff * math.pi / 180;
-      final clamped = angleRad.clamp(0.0, math.pi).toDouble();
-      final x = center.dx + radius * math.cos(clamped);
-      final y = center.dy + radius * math.sin(clamped);
-
-      canvas.drawCircle(
-        Offset(x, y.clamp(0, size.height + 20).toDouble()),
-        3,
-        Paint()..color = obj.color,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(CompassArcPainter oldDelegate) => true;
 }
 
 class RadarPainter extends CustomPainter {

@@ -14,7 +14,7 @@ class CompassService {
 
   double _filteredHeading = -1;
   double _lastEmitted = -1;
-  static const double _smoothing = 0.08;
+  static const double _smoothing = 0.3;
   static const double _deadZone = 0.5;
   DateTime _lastEmitTime = DateTime(2000);
 

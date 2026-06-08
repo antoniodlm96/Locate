@@ -111,14 +111,14 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('Buscar en Mapa'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: const Size.fromHeight(60),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Buscar lugar, calle...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, size: 24),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear),
@@ -166,15 +166,15 @@ class _MapScreenState extends State<MapScreen> {
                           _currentPosition!.latitude,
                           _currentPosition!.longitude,
                         ),
-                        width: 40,
-                        height: 40,
+                          width: 48,
+                        height: 48,
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.blue,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: const Icon(Icons.my_location, color: Colors.white, size: 20),
+                          child: const Icon(Icons.my_location, color: Colors.white, size: 24),
                         ),
                       ),
                     ],
@@ -195,33 +195,33 @@ class _MapScreenState extends State<MapScreen> {
 
       return Marker(
         point: LatLng(obj.latitude, obj.longitude),
-        width: 90,
-        height: 50,
+        width: 100,
+        height: 60,
         child: GestureDetector(
           onTap: () => _showObjectInfo(obj),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   obj.name,
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                  style: const TextStyle(color: Colors.white, fontSize: 11),
                 ),
               ),
               const SizedBox(height: 2),
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: obj.isActive ? color : color.withOpacity(0.4),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: Icon(icon, color: Colors.white, size: 16),
+                child: Icon(icon, color: Colors.white, size: 20),
               ),
             ],
           ),

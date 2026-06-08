@@ -10,6 +10,7 @@ class ARPainter extends CustomPainter {
   final double heading;
   final double fov;
   final Size screenSize;
+  final double topPadding;
 
   ARPainter({
     required this.objects,
@@ -17,6 +18,7 @@ class ARPainter extends CustomPainter {
     required this.heading,
     required this.fov,
     required this.screenSize,
+    this.topPadding = 0,
   });
 
   @override
@@ -32,7 +34,8 @@ class ARPainter extends CustomPainter {
     final stripPaint = Paint()
       ..color = Colors.black26
       ..style = PaintingStyle.fill;
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 24), stripPaint);
+    final stripTop = topPadding;
+    canvas.drawRect(Rect.fromLTWH(0, stripTop, size.width, 24), stripPaint);
 
     final tickPaint = Paint()
       ..color = Colors.white38
@@ -46,16 +49,16 @@ class ARPainter extends CustomPainter {
       d = _normalizeAngle(d);
       if (d.abs() > 90) continue;
       final x = size.width / 2 + (d / 90) * (size.width / 2);
-      canvas.drawLine(Offset(x, 18), Offset(x, 24), tickPaint);
-      _drawText(canvas, entry.key, x, 2, fontSize: 9, color: Colors.white54);
+      canvas.drawLine(Offset(x, stripTop + 18), Offset(x, stripTop + 24), tickPaint);
+      _drawText(canvas, entry.key, x, stripTop + 2, fontSize: 9, color: Colors.white54);
     }
 
     final centerPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 2;
     canvas.drawLine(
-      Offset(size.width / 2, 16),
-      Offset(size.width / 2, 24),
+      Offset(size.width / 2, stripTop + 16),
+      Offset(size.width / 2, stripTop + 24),
       centerPaint,
     );
   }

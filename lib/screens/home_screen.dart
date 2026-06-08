@@ -92,24 +92,24 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.explore, size: 80, color: theme.colorScheme.primary),
+              Icon(Icons.explore, size: 96, color: theme.colorScheme.primary),
               const SizedBox(height: 16),
               Text(
                 'Objetos guardados: $_objectCount',
-                style: theme.textTheme.titleMedium,
+                style: theme.textTheme.headlineSmall,
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
-                height: 80,
+                height: 90,
                 child: ElevatedButton.icon(
                   onPressed: () => _navigate(context, const RegisterObjectScreen()),
-                  icon: const Icon(Icons.add_location_alt, size: 32),
-                  label: const Text('Registrar Objeto', style: TextStyle(fontSize: 18)),
+                  icon: const Icon(Icons.add_location_alt, size: 36),
+                  label: const Text('Registrar Objeto', style: TextStyle(fontSize: 20)),
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -117,16 +117,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                height: 80,
+                height: 90,
                 child: ElevatedButton.icon(
                   onPressed: _objectCount > 0
                       ? () => _navigate(context, const ARViewScreen())
                       : null,
-                  icon: const Icon(Icons.view_in_ar, size: 32),
-                  label: const Text('Ver en RA', style: TextStyle(fontSize: 18)),
+                  icon: const Icon(Icons.view_in_ar, size: 36),
+                  label: const Text('Ver en RA', style: TextStyle(fontSize: 20)),
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -134,14 +134,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                height: 80,
+                height: 90,
                 child: OutlinedButton.icon(
                   onPressed: () => _navigate(context, const MapScreen()),
-                  icon: const Icon(Icons.map, size: 32),
-                  label: const Text('Buscar en Mapa', style: TextStyle(fontSize: 18)),
+                  icon: const Icon(Icons.map, size: 36),
+                  label: const Text('Buscar en Mapa', style: TextStyle(fontSize: 20)),
                   style: OutlinedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -149,16 +149,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                height: 80,
+                height: 90,
                 child: OutlinedButton.icon(
                   onPressed: _objectCount > 0
                       ? () => _navigate(context, const ManageObjectsScreen())
                       : null,
-                  icon: const Icon(Icons.list_alt, size: 32),
-                  label: const Text('Gestionar Objetos', style: TextStyle(fontSize: 18)),
+                  icon: const Icon(Icons.list_alt, size: 36),
+                  label: const Text('Gestionar Objetos', style: TextStyle(fontSize: 20)),
                   style: OutlinedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
