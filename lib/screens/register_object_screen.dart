@@ -17,18 +17,22 @@ const List<Map<String, dynamic>> objectTypes = [
   {'name': 'Parque', 'icon': Icons.park, 'color': Color(0xFF8BC34A)},
   {'name': 'Hospital', 'icon': Icons.local_hospital, 'color': Color(0xFFE57373)},
   {'name': 'Hotel', 'icon': Icons.hotel, 'color': Color(0xFF5C6BC0)},
+  {'name': 'Ciudad', 'icon': Icons.location_city, 'color': Color(0xFF607D8B)},
+  {'name': 'Pueblo', 'icon': Icons.store_mall_directory, 'color': Color(0xFF8D6E63)},
 ];
 
 class RegisterObjectScreen extends StatefulWidget {
   final LatLng? preselectedLatLng;
+  final String? preselectedName;
 
-  const RegisterObjectScreen({super.key, this.preselectedLatLng});
+  const RegisterObjectScreen({super.key, this.preselectedLatLng, this.preselectedName});
 
   @override
   State<RegisterObjectScreen> createState() => _RegisterObjectScreenState();
 }
 
 class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
+  final TextEditingController _nameController = TextEditingController();
   String? _selectedType;
   Position? _currentPosition;
   bool _loading = true;
@@ -36,6 +40,9 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.preselectedName != null && widget.preselectedName!.isNotEmpty) {
+      _nameController.text = widget.preselectedName!;
+    }
     if (widget.preselectedLatLng != null) {
       _currentPosition = Position(
         longitude: widget.preselectedLatLng!.longitude,
@@ -107,8 +114,9 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
   Future<void> _save() async {
     if (_selectedType == null || _currentPosition == null) return;
 
+    final customName = _nameController.text.trim();
     final obj = SavedObject(
-      name: _selectedType!,
+      name: customName.isNotEmpty ? customName : _selectedType!,
       type: _selectedType!,
       latitude: _currentPosition!.latitude,
       longitude: _currentPosition!.longitude,
@@ -120,11 +128,17 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$_selectedType guardado en la ubicación actual'),
+          content: Text('${obj.name} guardado en la ubicación actual'),
           behavior: SnackBarBehavior.floating,
         ),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   @override
@@ -164,6 +178,21 @@ class _RegisterObjectScreenState extends State<RegisterObjectScreen> {
                         style: theme.textTheme.bodyLarge?.copyWith(
                           fontFamily: 'monospace',
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Nombre personalizado',
+                          hintText: 'Ej: Casa de la abuela',
+                          prefixIcon: const Icon(Icons.edit),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: theme.colorScheme.surfaceContainerLow,
+                        ),
+                        textCapitalization: TextCapitalization.words,
                       ),
                       const SizedBox(height: 24),
                       Text(

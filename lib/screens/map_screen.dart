@@ -21,6 +21,7 @@ class _MapScreenState extends State<MapScreen> {
   Position? _currentPosition;
   bool _loading = true;
   bool _mapReady = false;
+  String? _lastSearchQuery;
 
   @override
   void initState() {
@@ -74,6 +75,7 @@ class _MapScreenState extends State<MapScreen> {
       }
       final loc = locations.first;
       _mapController.move(LatLng(loc.latitude, loc.longitude), 17);
+      setState(() => _lastSearchQuery = query);
       _searchController.clear();
     } catch (e) {
       if (mounted) {
@@ -88,7 +90,10 @@ class _MapScreenState extends State<MapScreen> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => RegisterObjectScreen(preselectedLatLng: pos),
+        builder: (_) => RegisterObjectScreen(
+          preselectedLatLng: pos,
+          preselectedName: _lastSearchQuery,
+        ),
       ),
     );
     if (result == true) {
@@ -124,7 +129,7 @@ class _MapScreenState extends State<MapScreen> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {});
+                          setState(() => _lastSearchQuery = null);
                         },
                       )
                     : null,
