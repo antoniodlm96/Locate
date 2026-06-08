@@ -1,5 +1,17 @@
+# Flutter
+.dart_tool/
+.packages
+.pub/
+build/
 *.iml
-.gradle
+.idea/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android (Flutter's android/)
+*.iml
+.gradle/
 /local.properties
 /.idea/libraries
 /.idea/modules.xml
@@ -8,3 +20,21 @@
 /build
 /captures
 .externalNativeBuild
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/*.xcworkspace
+ios/build/
+
+# General
+.DS_Store
+*.swp
+*.swo
+*~

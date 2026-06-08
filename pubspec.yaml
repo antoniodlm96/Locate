@@ -1,0 +1,28 @@
+name: locate
+description: Locate - Localiza objetos via GPS y Realidad Aumentada
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  camera: ^0.10.6
+  geolocator: ^11.0.0
+  sqflite: ^2.3.0
+  path_provider: ^2.1.0
+  sensors_plus: ^7.0.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geocoding: ^4.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
