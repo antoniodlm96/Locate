@@ -122,70 +122,29 @@ class GroundRadarPainter extends CustomPainter {
     final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
     final radialExtent = radius * 0.88;
 
-    // === Object positions: polar→AR smooth transition ===
-    // AR target = same position as AR painter's floating markers
-    final visibleCone = 180.0 + (1.0 - t) * 180.0;
-    final polarBlend = ((t - 0.5) / 0.35).clamp(0.0, 1.0);
-
-    final Map<int, Offset> objPositions = {};
-
-    for (final obj in objects) {
-      final bearingDiff = obj.bearing - heading;
-      final absDiff = bearingDiff.abs();
-      final angleRad = bearingDiff * math.pi / 180;
-
-      final excess = (absDiff - visibleCone * 0.5) / (visibleCone * 0.5);
-      final fade = (1.0 - excess * 2).clamp(0.0, 1.0);
-      if (fade < 0.01) continue;
-
-      final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
-      final objR = distFactor * radialExtent;
-
-      // Polar: circular radar position
-      final polarX = centerX + objR * math.sin(angleRad);
-      final polarY = centerY - objR * math.cos(angleRad) * yScale;
-
-      // AR target: same position as AR painter's horizon markers
-      final arX = (size.width / 2 + (bearingDiff / 90.0) * (size.width / 2))
-          .clamp(0.0, size.width);
-      final arY = size.height * 0.38;
-
-      final x = _lerp(polarX, arX, polarBlend);
-      final y = _lerp(polarY, arY, polarBlend);
-
-      objPositions[obj.object.id!] = Offset(x, y);
-
-      // Glow
-      final glowRadius = 16 + 8 * polarBlend;
-      canvas.drawCircle(Offset(x, y), glowRadius, Paint()
-        ..shader = RadialGradient(
-          colors: [obj.color.withOpacity(0.4 * fade), obj.color.withOpacity(0.0)],
-        ).createShader(const Offset(0, 0) & Size(glowRadius * 2, glowRadius * 2)));
-
-      // Dot
-      final dotR = 8 + 2 * polarBlend;
-      canvas.drawCircle(Offset(x, y), dotR, Paint()..color = obj.color.withOpacity(fade));
-      canvas.drawCircle(Offset(x, y), dotR, Paint()
-        ..color = Colors.white.withOpacity(0.5 * fade)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5);
-
-      // Label
-      if (polarBlend < 0.3) {
-        final off = (y < centerY) ? const Offset(16, -12) : const Offset(16, 12);
-        _drawText(canvas, obj.object.name, x + off.dx, y + off.dy,
-            fontSize: 14, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
-        _drawText(canvas, formatDistance(obj.distance), x + off.dx, y + off.dy + 18,
-            fontSize: 12, color: Colors.white.withOpacity(0.85 * fade));
-      } else {
-        _drawText(canvas, obj.object.name, x, y - 18,
-            fontSize: 13, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
-        _drawText(canvas, formatDistance(obj.distance), x, y + 2,
-            fontSize: 11, color: Colors.white.withOpacity(0.85 * fade));
+    // === Groups: always use pure polar coordinates (stay on the compass) ===
+    final Map<int, Offset> groupPositions = {};
+    for (final group in groups) {
+      for (final m in group.sortedObjects) {
+        final id = m.id;
+        if (id == null) continue;
+        final obj = objects.cast<ObjectWithDistance?>().firstWhere(
+          (o) => o?.object.id == id,
+          orElse: () => null,
+        );
+        if (obj == null) continue;
+        final bearingDiff = obj.bearing - heading;
+        final angleRad = bearingDiff * math.pi / 180;
+        final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
+        final objR = distFactor * radialExtent;
+        groupPositions[id] = Offset(
+          centerX + objR * math.sin(angleRad),
+          centerY - objR * math.cos(angleRad) * yScale,
+        );
       }
     }
 
-    // === Groups: use the same blended positions as objects ===
+    // Render groups first (behind objects)
     for (final group in groups) {
       final members = group.sortedObjects;
       if (members.length < 2) continue;
@@ -194,7 +153,7 @@ class GroundRadarPainter extends CustomPainter {
       for (final m in members) {
         final id = m.id;
         if (id == null) continue;
-        final pos = objPositions[id];
+        final pos = groupPositions[id];
         if (pos != null) pts.add(pos);
       }
       if (pts.length < 2) continue;
@@ -230,6 +189,52 @@ class GroundRadarPainter extends CustomPainter {
       for (final p in pts) { cx += p.dx; cy += p.dy; }
       _drawText(canvas, group.name, cx / pts.length, cy / pts.length,
           fontSize: 12, fontWeight: FontWeight.bold, color: baseColor.withOpacity(1.0));
+    }
+
+    // === Objects: polar coordinates on the compass ===
+    final visibleCone = 180.0 + (1.0 - t) * 180.0;
+
+    for (final obj in objects) {
+      final bearingDiff = obj.bearing - heading;
+      final absDiff = bearingDiff.abs();
+      final angleRad = bearingDiff * math.pi / 180;
+
+      final excess = (absDiff - visibleCone * 0.5) / (visibleCone * 0.5);
+      final fade = (1.0 - excess * 2).clamp(0.0, 1.0);
+      if (fade < 0.01) continue;
+
+      final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
+      final objR = distFactor * radialExtent;
+
+      final x = centerX + objR * math.sin(angleRad);
+      final y = centerY - objR * math.cos(angleRad) * yScale;
+
+      // Glow
+      canvas.drawCircle(Offset(x, y), 16, Paint()
+        ..shader = RadialGradient(
+          colors: [obj.color.withOpacity(0.4 * fade), obj.color.withOpacity(0.0)],
+        ).createShader(const Offset(0, 0) & Size(32, 32)));
+
+      // Dot
+      canvas.drawCircle(Offset(x, y), 8, Paint()..color = obj.color.withOpacity(fade));
+      canvas.drawCircle(Offset(x, y), 8, Paint()
+        ..color = Colors.white.withOpacity(0.5 * fade)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5);
+
+      // Label
+      if (t < 0.5) {
+        final off = (y < centerY) ? const Offset(16, -12) : const Offset(16, 12);
+        _drawText(canvas, obj.object.name, x + off.dx, y + off.dy,
+            fontSize: 14, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
+        _drawText(canvas, formatDistance(obj.distance), x + off.dx, y + off.dy + 18,
+            fontSize: 12, color: Colors.white.withOpacity(0.85 * fade));
+      } else {
+        _drawText(canvas, obj.object.name, x, y - 18,
+            fontSize: 13, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
+        _drawText(canvas, formatDistance(obj.distance), x, y + 2,
+            fontSize: 11, color: Colors.white.withOpacity(0.85 * fade));
+      }
     }
   }
 
