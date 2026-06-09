@@ -276,18 +276,11 @@ class UnifiedARPainter extends CustomPainter {
           fontSize: 12, fontWeight: FontWeight.bold, color: baseColor.withOpacity(1.0));
     }
 
-    // Objects
-    // Visibility cone: 360° at tilt=0 (full circle), 180° at tilt=1 (front hemisphere)
-    final visibleCone = 180.0 + (1.0 - t) * 180.0;
-
+    // Objects — always visible in the compass (no bearing cone filter)
     for (final obj in objects) {
       final bearingDiff = obj.bearing - heading;
       final absDiff = bearingDiff.abs();
       final angleRad = bearingDiff * math.pi / 180;
-
-      final excess = (absDiff - visibleCone * 0.5) / (visibleCone * 0.5);
-      final fade = (1.0 - excess * 2).clamp(0.0, 1.0);
-      if (fade < 0.01) continue;
 
       final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
       final objR = distFactor * radialExtent;
@@ -298,13 +291,13 @@ class UnifiedARPainter extends CustomPainter {
       // Glow
       canvas.drawCircle(Offset(x, y), 16, Paint()
         ..shader = RadialGradient(
-          colors: [obj.color.withOpacity(0.4 * fade), obj.color.withOpacity(0.0)],
+          colors: [obj.color.withOpacity(0.4), obj.color.withOpacity(0.0)],
         ).createShader(const Offset(0, 0) & Size(32, 32)));
 
       // Dot
-      canvas.drawCircle(Offset(x, y), 8, Paint()..color = obj.color.withOpacity(fade));
+      canvas.drawCircle(Offset(x, y), 8, Paint()..color = obj.color);
       canvas.drawCircle(Offset(x, y), 8, Paint()
-        ..color = Colors.white.withOpacity(0.5 * fade)
+        ..color = Colors.white.withOpacity(0.5)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5);
 
@@ -312,14 +305,14 @@ class UnifiedARPainter extends CustomPainter {
       if (t < 0.5) {
         final off = (y < centerY) ? const Offset(16, -12) : const Offset(16, 12);
         _drawText(canvas, obj.object.name, x + off.dx, y + off.dy,
-            fontSize: 14, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
+            fontSize: 14, fontWeight: FontWeight.bold, color: obj.color);
         _drawText(canvas, formatDistance(obj.distance), x + off.dx, y + off.dy + 18,
-            fontSize: 12, color: Colors.white.withOpacity(0.85 * fade));
+            fontSize: 12, color: Colors.white.withOpacity(0.85));
       } else {
         _drawText(canvas, obj.object.name, x, y - 18,
-            fontSize: 13, fontWeight: FontWeight.bold, color: obj.color.withOpacity(fade));
+            fontSize: 13, fontWeight: FontWeight.bold, color: obj.color);
         _drawText(canvas, formatDistance(obj.distance), x, y + 2,
-            fontSize: 11, color: Colors.white.withOpacity(0.85 * fade));
+            fontSize: 11, color: Colors.white.withOpacity(0.85));
       }
     }
   }
