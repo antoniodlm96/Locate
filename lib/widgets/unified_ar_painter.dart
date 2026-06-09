@@ -30,15 +30,21 @@ class UnifiedARPainter extends CustomPainter {
     this.topPadding = 0,
   });
 
-  // Cache for the compass picture — regenerated when size or heading changes
+  // Cache for the compass picture — regenerated when size, heading, or tilt changes significantly
   static Picture? _cachedCompass;
   static Size _cachedSize = Size.zero;
   static double _cachedHeading = -999;
+  static double _cachedTilt = -999;
 
   static Picture? buildCompassPicture(Size size, double heading, double tilt) {
     final sizeDiff = (size.width - _cachedSize.width).abs() + (size.height - _cachedSize.height).abs();
-    final keyChanged = sizeDiff > 1 || (heading - _cachedHeading).abs() > 5;
+    final tiltDiff = (tilt - _cachedTilt).abs();
+    final keyChanged = sizeDiff > 1 || (heading - _cachedHeading).abs() > 3 || tiltDiff > 0.03;
     if (!keyChanged && _cachedCompass != null) return _cachedCompass;
+
+    _cachedSize = size;
+    _cachedHeading = heading;
+    _cachedTilt = tilt;
 
     final t = tilt.clamp(0.0, 1.0);
     final yScale = 0.35 + 0.65 * math.cos(t * math.pi / 2);
@@ -271,7 +277,8 @@ class UnifiedARPainter extends CustomPainter {
     }
 
     // Objects
-    const visibleCone = 180.0;
+    // Visibility cone: 360° at tilt=0 (full circle), 180° at tilt=1 (front hemisphere)
+    final visibleCone = 180.0 + (1.0 - t) * 180.0;
 
     for (final obj in objects) {
       final bearingDiff = obj.bearing - heading;
