@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import '../models/object_group.dart';
 import '../screens/ar_view_screen.dart';
 

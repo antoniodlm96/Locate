@@ -15,9 +15,6 @@ class CompassService {
 
   double _heading = -1;
   double _lastEmitted = -1;
-  DateTime _lastEmitTime = DateTime(2000);
-  static const double _deadZone = 1.0;
-  static const int _minIntervalMs = 80;
 
   int _lastGyroTime = 0;
   static const double _driftCorrection = 0.02;
@@ -25,13 +22,13 @@ class CompassService {
   Stream<double> get headingStream => _headingController.stream;
 
   void start() {
-    _accSub = accelerometerEventStream(samplingPeriod: SensorInterval.uiInterval).listen((event) {
+    _accSub = accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
       _acc = [event.x, event.y, event.z];
       _hasAcc = true;
       _tryComputeHeading();
     });
 
-    _magSub = magnetometerEventStream(samplingPeriod: SensorInterval.uiInterval).listen((event) {
+    _magSub = magnetometerEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
       _mag = [event.x, event.y, event.z];
       _hasMag = true;
       _tryComputeHeading();
@@ -49,7 +46,6 @@ class CompassService {
       _lastGyroTime = now;
       if (dt <= 0 || dt > 0.1) return;
 
-      // Project gyro angular velocity onto gravity direction to get heading change
       final normA = sqrt(_acc[0] * _acc[0] + _acc[1] * _acc[1] + _acc[2] * _acc[2]);
       if (normA < 0.001) return;
       final gx = _acc[0] / normA;
@@ -60,7 +56,7 @@ class CompassService {
       _heading += headingRate * dt * 180 / pi;
       _heading = (_heading + 360) % 360;
 
-      _tryEmit(_heading);
+      _emit(_heading);
     });
   }
 
@@ -86,15 +82,12 @@ class CompassService {
     final myn = my / normM;
     final mzn = mz / normM;
 
-    // Camera (-Z axis) heading - for vertical/AR mode
     final camSin = myn * gx - mxn * gy;
     final camCos = -mzn + gz * (mxn * gx + myn * gy + mzn * gz);
 
-    // Y-axis (top of phone) heading - for horizontal/radar mode
     final ySin = mzn * gx - mxn * gz;
     final yCos = myn - gy * (mxn * gx + myn * gy + mzn * gz);
 
-    // Blend based on tilt: gz² = 0 when vertical, = 1 when flat
     final flatness = (gz * gz).clamp(0.0, 1.0);
     final blend = flatness < 0.08 ? 0.0 : flatness > 0.85 ? 1.0 : flatness;
 
@@ -106,11 +99,10 @@ class CompassService {
 
     if (_heading < 0) {
       _heading = magHeading;
-      _tryEmit(_heading);
+      _emit(_heading);
       return;
     }
 
-    // Slow correction of gyro drift using magnetometer absolute heading
     var diff = magHeading - _heading;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;
@@ -119,24 +111,11 @@ class CompassService {
     if (_heading >= 360) _heading -= 360;
   }
 
-  void _tryEmit(double heading) {
-    if (_lastEmitted < 0) {
+  void _emit(double heading) {
+    if (_lastEmitted < 0 || (heading - _lastEmitted).abs() > 0.1) {
       _lastEmitted = heading;
-      _lastEmitTime = DateTime.now();
       _headingController.add(heading);
-      return;
     }
-
-    if (DateTime.now().difference(_lastEmitTime).inMilliseconds < _minIntervalMs) return;
-
-    var emitDiff = heading - _lastEmitted;
-    if (emitDiff > 180) emitDiff -= 360;
-    if (emitDiff < -180) emitDiff += 360;
-    if (emitDiff.abs() < _deadZone) return;
-
-    _lastEmitted = heading;
-    _lastEmitTime = DateTime.now();
-    _headingController.add(heading);
   }
 
   void stop() {

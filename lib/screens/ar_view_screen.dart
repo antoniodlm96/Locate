@@ -8,8 +8,7 @@ import '../models/saved_object.dart';
 import '../models/object_group.dart';
 import '../services/database_service.dart';
 import '../services/compass_service.dart';
-import '../widgets/ar_painter.dart';
-import '../widgets/ground_radar_painter.dart';
+import '../widgets/unified_ar_painter.dart';
 import 'register_object_screen.dart';
 
 class ObjectWithDistance {
@@ -53,24 +52,26 @@ class _ARViewScreenState extends State<ARViewScreen> {
   bool _initialized = false;
   List<ObjectWithDistance> _sortedObjects = [];
 
-  final ValueNotifier<double> _headingNotifier = ValueNotifier(0);
+  // Combined state: single repaint trigger
+  double _heading = 0;
+  double _tilt = 0;
+  bool _needsRepaint = false;
 
-  double _gz = 0;
-  double _smoothedTilt = 0;
-  final ValueNotifier<double> _tiltNotifier = ValueNotifier(0);
   StreamSubscription? _accSub;
 
   @override
   void initState() {
     super.initState();
-    _accSub = accelerometerEventStream().listen((event) {
+    // Tilt at game rate for smooth tracking
+    _accSub = accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval).listen((event) {
       final norm = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       if (norm > 0) {
-        _gz = event.z / norm;
-        final rawTilt = (1.0 - _gz.abs()).clamp(0.0, 1.0);
-        _smoothedTilt += (rawTilt - _smoothedTilt) * 0.06;
-        if ((_smoothedTilt - _tiltNotifier.value).abs() > 0.005) {
-          _tiltNotifier.value = _smoothedTilt;
+        final gz = event.z / norm;
+        final rawTilt = (1.0 - gz.abs()).clamp(0.0, 1.0);
+        final smoothed = _tilt + (rawTilt - _tilt) * 0.06;
+        if ((smoothed - _tilt).abs() > 0.005) {
+          _tilt = smoothed;
+          _triggerRepaint();
         }
       }
     });
@@ -78,7 +79,21 @@ class _ARViewScreenState extends State<ARViewScreen> {
   }
 
   void _onHeading(double h) {
-    _headingNotifier.value = h;
+    _heading = h;
+    _triggerRepaint();
+  }
+
+  void _triggerRepaint() {
+    if (!_needsRepaint) {
+      _needsRepaint = true;
+      // Schedule repaint on next frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _needsRepaint = false;
+          setState(() {});
+        }
+      });
+    }
   }
 
   Future<void> _init() async {
@@ -174,8 +189,6 @@ class _ARViewScreenState extends State<ARViewScreen> {
 
   @override
   void dispose() {
-    _headingNotifier.dispose();
-    _tiltNotifier.dispose();
     _accSub?.cancel();
     _cameraController?.dispose();
     _headingSub?.cancel();
@@ -192,33 +205,32 @@ class _ARViewScreenState extends State<ARViewScreen> {
       );
     }
 
+    final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: ValueListenableBuilder<double>(
-          valueListenable: _headingNotifier,
-          builder: (_, h, __) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.navigation, size: 16, color: Colors.white70),
-                const SizedBox(width: 6),
-                Text(
-                  '${h.toStringAsFixed(0)}°',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                  ),
+        title: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.navigation, size: 16, color: Colors.white70),
+              const SizedBox(width: 6),
+              Text(
+                '${_heading.toStringAsFixed(0)}°',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         backgroundColor: Colors.transparent,
@@ -228,69 +240,33 @@ class _ARViewScreenState extends State<ARViewScreen> {
       ),
       body: Stack(
         children: [
-          // Camera preview always visible when initialized
+          // Camera preview
           if (_cameraController != null && _cameraController!.value.isInitialized)
             RepaintBoundary(
-              child: Stack(
-                children: [
-                  CameraPreview(_cameraController!),
-                  // Floating AR markers
-                  if (_currentPosition != null)
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
-                        return ValueListenableBuilder<double>(
-                          valueListenable: _headingNotifier,
-                          builder: (_, heading, __) {
-                            return ValueListenableBuilder<double>(
-                              valueListenable: _tiltNotifier,
-                              builder: (_, tilt, __) {
-                                return CustomPaint(
-                                  size: Size(constraints.maxWidth, constraints.maxHeight),
-                                  painter: ARPainter(
-                                    objects: _objects,
-                                    currentPosition: _currentPosition!,
-                                    heading: heading,
-                                    tilt: tilt,
-                                    fov: 180,
-                                    screenSize: Size(constraints.maxWidth, constraints.maxHeight),
-                                    topPadding: topPad,
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-                ],
-              ),
+              child: CameraPreview(_cameraController!),
             ),
 
-          // Ground radar on top of everything, tilts with phone
+          // Unified AR overlay (AR markers + ground radar in one CustomPaint)
           if (_currentPosition != null)
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return ValueListenableBuilder<double>(
-                  valueListenable: _headingNotifier,
-                  builder: (_, heading, __) {
-                    return ValueListenableBuilder<double>(
-                      valueListenable: _tiltNotifier,
-                      builder: (_, tilt, __) {
-                        return CustomPaint(
-                          size: Size(constraints.maxWidth, constraints.maxHeight),
-                          painter: GroundRadarPainter(
-                            objects: _sortedObjects,
-                            groups: _groups,
-                            heading: heading,
-                            tilt: tilt,
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+            RepaintBoundary(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return CustomPaint(
+                    size: Size(constraints.maxWidth, constraints.maxHeight),
+                    painter: UnifiedARPainter(
+                      objects: _sortedObjects,
+                      groups: _groups,
+                      currentPosition: _currentPosition!,
+                      rawObjects: _objects,
+                      heading: _heading,
+                      tilt: _tilt,
+                      fov: 180,
+                      screenSize: Size(constraints.maxWidth, constraints.maxHeight),
+                      topPadding: topPad,
+                    ),
+                  );
+                },
+              ),
             ),
 
           if (_currentPosition == null)
@@ -308,6 +284,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
               ),
             ),
 
+          // Bottom list
           Positioned(
             bottom: 0,
             left: 0,
