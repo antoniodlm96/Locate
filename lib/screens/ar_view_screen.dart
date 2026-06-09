@@ -360,13 +360,13 @@ class _ARViewScreenState extends State<ARViewScreen> {
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(Icons.radar, size: 14, color: Colors.white38),
+                Icon(Icons.radar, size: 16, color: Colors.white70),
                 SizedBox(width: 6),
                 Text(
                   'CERCANOS',
                   style: TextStyle(
-                    color: Colors.white38,
-                    fontSize: 11,
+                    color: Colors.white60,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1.5,
                   ),
@@ -384,47 +384,47 @@ class _ARViewScreenState extends State<ARViewScreen> {
                 final item = _sortedObjects[index];
                 final isClosest = index == 0;
                 return Container(
-                  width: 100,
+                  width: 110,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        item.color.withOpacity(0.25),
-                        item.color.withOpacity(0.10),
+                        item.color.withOpacity(0.35),
+                        item.color.withOpacity(0.15),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: item.color.withOpacity(isClosest ? 0.5 : 0.2),
-                      width: isClosest ? 1.5 : 1,
+                      color: item.color.withOpacity(isClosest ? 0.7 : 0.35),
+                      width: isClosest ? 2 : 1.5,
                     ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
-                          color: item.color.withOpacity(0.2),
+                          color: item.color.withOpacity(0.3),
                           shape: BoxShape.circle,
-                          border: Border.all(color: item.color.withOpacity(0.4), width: 1),
+                          border: Border.all(color: item.color.withOpacity(0.6), width: 1.5),
                         ),
-                        child: Icon(item.icon, color: item.color, size: 18),
+                        child: Icon(item.icon, color: item.color, size: 20),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         item.object.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                       ),
                       Text(
                         formatDistance(item.distance),
-                        style: TextStyle(color: item.color.withOpacity(0.8), fontSize: 10),
+                        style: TextStyle(color: item.color.withOpacity(0.9), fontSize: 11),
                       ),
                     ],
                   ),

@@ -60,12 +60,12 @@ class ARPainter extends CustomPainter {
 
   void _drawCompassStrip(Canvas canvas, Size size) {
     final stripTop = topPadding + 4;
-    const stripH = 32.0;
+    const stripH = 40.0;
 
     final bgPaint = Paint()
       ..shader = LinearGradient(
-        colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.55), Colors.black.withOpacity(0.55), Colors.black.withOpacity(0.0)],
-        stops: const [0.0, 0.08, 0.92, 1.0],
+        colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.7), Colors.black.withOpacity(0.7), Colors.black.withOpacity(0.0)],
+        stops: const [0.0, 0.05, 0.95, 1.0],
       ).createShader(Rect.fromLTWH(0, stripTop, size.width, stripH));
     canvas.drawRRect(
       RRect.fromRectAndRadius(
@@ -87,22 +87,22 @@ class ARPainter extends CustomPainter {
       final x = size.width / 2 + (d / 90) * (size.width / 2);
 
       final isCardinal = ['N', 'E', 'S', 'O'].contains(entry.key);
-      final tickH = isCardinal ? 18.0 : 10.0;
+      final tickH = isCardinal ? 24.0 : 14.0;
       final tickY = stripTop + stripH - tickH;
 
       canvas.drawLine(
         Offset(x, tickY),
         Offset(x, stripTop + stripH),
         Paint()
-          ..color = isCardinal ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.25)
-          ..strokeWidth = isCardinal ? 2 : 1,
+          ..color = isCardinal ? Colors.white.withOpacity(0.9) : Colors.white.withOpacity(0.4)
+          ..strokeWidth = isCardinal ? 3 : 1.5,
       );
 
       _drawText(
         canvas, entry.key, x, stripTop + 2,
-        fontSize: isCardinal ? 11 : 8,
-        color: isCardinal ? Colors.white.withOpacity(0.85) : Colors.white.withOpacity(0.35),
-        fontWeight: isCardinal ? FontWeight.bold : FontWeight.normal,
+        fontSize: isCardinal ? 14 : 10,
+        color: isCardinal ? Colors.white : Colors.white.withOpacity(0.55),
+        fontWeight: isCardinal ? FontWeight.bold : FontWeight.w500,
       );
     }
 
@@ -110,17 +110,17 @@ class ARPainter extends CustomPainter {
     final cy = stripTop + stripH / 2;
     final diamondPaint = Paint()..color = Colors.white;
     final diamondPath = Path()
-      ..moveTo(cx, cy - 6)
-      ..lineTo(cx + 5, cy)
-      ..lineTo(cx, cy + 6)
-      ..lineTo(cx - 5, cy)
+      ..moveTo(cx, cy - 8)
+      ..lineTo(cx + 6, cy)
+      ..lineTo(cx, cy + 8)
+      ..lineTo(cx - 6, cy)
       ..close();
     canvas.drawPath(diamondPath, diamondPaint);
 
     canvas.drawLine(
-      Offset(cx, stripTop + stripH - 18),
+      Offset(cx, stripTop + stripH - 24),
       Offset(cx, stripTop + stripH),
-      Paint()..color = Colors.white.withOpacity(0.3)..strokeWidth = 1,
+      Paint()..color = Colors.white.withOpacity(0.5)..strokeWidth = 1.5,
     );
   }
 
@@ -146,26 +146,27 @@ class ARPainter extends CustomPainter {
     final iconSize = _iconSizeForDistance(distance);
     final scaledIconSize = iconSize * (0.7 + 0.3 * markerOpacity);
 
-    // Glow
+    // Glow (stronger, larger)
+    final glowRadius = scaledIconSize * 1.0;
     final glowPaint = Paint()
       ..shader = RadialGradient(
-        colors: [color.withOpacity(0.4 * markerOpacity), color.withOpacity(0.0)],
-      ).createShader(Rect.fromCircle(center: Offset(x, centerY), radius: scaledIconSize * 0.8));
-    canvas.drawCircle(Offset(x, centerY), scaledIconSize * 0.8, glowPaint);
+        colors: [color.withOpacity(0.6 * markerOpacity), color.withOpacity(0.0)],
+      ).createShader(Rect.fromCircle(center: Offset(x, centerY), radius: glowRadius));
+    canvas.drawCircle(Offset(x, centerY), glowRadius, glowPaint);
 
     // Pill
-    final pillW = scaledIconSize + 16;
-    final pillH = scaledIconSize + 10;
+    final pillW = scaledIconSize + 20;
+    final pillH = scaledIconSize + 14;
     final pillRect = RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset(x, centerY), width: pillW, height: pillH),
-      const Radius.circular(16),
+      const Radius.circular(20),
     );
 
     final bgPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          color.withOpacity(0.9 * markerOpacity),
-          color.withOpacity(0.7 * markerOpacity),
+          color.withOpacity(0.95 * markerOpacity),
+          color.withOpacity(0.75 * markerOpacity),
         ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -175,15 +176,15 @@ class ARPainter extends CustomPainter {
     canvas.drawRRect(
       pillRect,
       Paint()
-        ..color = Colors.white.withOpacity(0.5 * markerOpacity)
+        ..color = Colors.white.withOpacity(0.6 * markerOpacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 2,
     );
 
     canvas.drawCircle(
       Offset(x, centerY),
       scaledIconSize / 2,
-      Paint()..color = Colors.white.withOpacity(0.25 * markerOpacity),
+      Paint()..color = Colors.white.withOpacity(0.3 * markerOpacity),
     );
 
     final iconPainter = TextPainter(
@@ -203,53 +204,56 @@ class ARPainter extends CustomPainter {
       Offset(x - iconPainter.width / 2, centerY - iconPainter.height / 2),
     );
 
-    final labelY = centerY + pillH / 2 + 4;
+    // Label card (larger)
+    final labelY = centerY + pillH / 2 + 6;
+    final labelW = pillW + 20;
+    const labelH = 40.0;
 
     final labelBgRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(x, labelY + 14), width: pillW + 16, height: 32),
-      const Radius.circular(10),
+      Rect.fromCenter(center: Offset(x, labelY + 18), width: labelW, height: labelH),
+      const Radius.circular(12),
     );
     canvas.drawRRect(
       labelBgRect,
-      Paint()..color = Colors.black.withOpacity(0.7 * markerOpacity),
+      Paint()..color = Colors.black.withOpacity(0.8 * markerOpacity),
     );
     canvas.drawRRect(
       labelBgRect,
       Paint()
-        ..color = Colors.white.withOpacity(0.15 * markerOpacity)
+        ..color = Colors.white.withOpacity(0.2 * markerOpacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.5,
+        ..strokeWidth = 1,
     );
 
     _drawText(
       canvas, obj.name, x, labelY + 4,
       fontWeight: FontWeight.bold,
-      fontSize: 12,
+      fontSize: 14,
       color: Colors.white.withOpacity(0.95 * markerOpacity),
     );
     _drawText(
-      canvas, _formatDistance(distance), x, labelY + 20,
-      fontSize: 10,
-      color: color.withOpacity(0.9 * markerOpacity),
+      canvas, _formatDistance(distance), x, labelY + 22,
+      fontSize: 12,
+      color: color.withOpacity(0.95 * markerOpacity),
     );
   }
 
   void _drawEdgeDot(Canvas canvas, double angleDiff, Color color, double distance, double opacity) {
-    final x = angleDiff < 0 ? 16.0 : screenSize.width - 16.0;
+    final x = angleDiff < 0 ? 20.0 : screenSize.width - 20.0;
     final centerY = screenSize.height * 0.38;
 
     canvas.drawCircle(
       Offset(x, centerY),
-      6,
-      Paint()..color = color.withOpacity(0.9 * opacity),
+      10,
+      Paint()..color = color.withOpacity(0.95 * opacity),
     );
     canvas.drawCircle(
       Offset(x, centerY),
-      6,
+      10,
       Paint()
-        ..color = Colors.white.withOpacity(0.5 * opacity)
+        ..color = Colors.white.withOpacity(0.6 * opacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+        ..strokeWidth = 2,
     );
 
     final arrowIcon = angleDiff < 0 ? Icons.chevron_left : Icons.chevron_right;
@@ -257,8 +261,8 @@ class ARPainter extends CustomPainter {
       text: TextSpan(
         text: String.fromCharCode(arrowIcon.codePoint),
         style: TextStyle(
-          fontSize: 18,
-          color: color.withOpacity(0.9 * opacity),
+          fontSize: 22,
+          color: color.withOpacity(0.95 * opacity),
           fontFamily: arrowIcon.fontFamily,
         ),
       ),
@@ -267,13 +271,13 @@ class ARPainter extends CustomPainter {
     arrowPainter.layout();
     arrowPainter.paint(
       canvas,
-      Offset(x - arrowPainter.width / 2, centerY - arrowPainter.height / 2 - 12),
+      Offset(x - arrowPainter.width / 2, centerY - arrowPainter.height / 2 - 16),
     );
 
     _drawText(
-      canvas, _formatDistance(distance), x, centerY + 16,
-      fontSize: 11,
-      color: Colors.white.withOpacity(0.85 * opacity),
+      canvas, _formatDistance(distance), x, centerY + 22,
+      fontSize: 13,
+      color: Colors.white.withOpacity(0.9 * opacity),
     );
   }
 
@@ -287,7 +291,8 @@ class ARPainter extends CustomPainter {
           fontSize: fontSize,
           fontWeight: fontWeight,
           shadows: const [
-            Shadow(blurRadius: 8, color: Color(0xCC000000)),
+            Shadow(blurRadius: 10, color: Color(0xDD000000)),
+            Shadow(blurRadius: 3, color: Color(0xBB000000)),
           ],
         ),
       ),
@@ -327,10 +332,10 @@ class ARPainter extends CustomPainter {
   double _toDegrees(double radians) => radians * 180 / math.pi;
 
   double _iconSizeForDistance(double distance) {
-    if (distance < 10) return 50;
-    if (distance < 100) return 44;
-    if (distance < 500) return 38;
-    return 32;
+    if (distance < 10) return 60;
+    if (distance < 100) return 52;
+    if (distance < 500) return 44;
+    return 38;
   }
 
   String _formatDistance(double meters) {

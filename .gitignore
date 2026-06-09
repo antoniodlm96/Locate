@@ -38,3 +38,7 @@ ios/build/
 *.swp
 *.swo
 *~
+
+# Media
+/videos/
+/screenshots/
