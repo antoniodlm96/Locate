@@ -348,8 +348,9 @@ class _ARViewScreenState extends State<ARViewScreen> {
       );
     }
 
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     return Container(
-      height: 150,
+      height: 140 + bottomPad,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -360,7 +361,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
           ],
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+      padding: EdgeInsets.fromLTRB(0, 24, 0, 8 + bottomPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

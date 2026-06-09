@@ -305,22 +305,64 @@ class _MapScreenState extends State<MapScreen> {
           borderStrokeWidth: 2,
         ));
 
+        // Individual side distances
+        for (int i = 0; i < points.length; i++) {
+          final next = (i + 1) % points.length;
+          final mid = LatLng(
+            (points[i].latitude + points[next].latitude) / 2,
+            (points[i].longitude + points[next].longitude) / 2,
+          );
+          final segDist = Geolocator.distanceBetween(
+            points[i].latitude, points[i].longitude,
+            points[next].latitude, points[next].longitude,
+          );
+          markers.add(Marker(
+            point: mid,
+            width: 50,
+            height: 18,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _formatDistance(segDist),
+                style: const TextStyle(color: Colors.white, fontSize: 8),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ));
+        }
+
         final totalDist = _computePerimeter(points);
+        final areaValue = _computeArea(points);
         final centroid = _computeCentroid(points);
         markers.add(Marker(
           point: centroid,
-          width: 80,
-          height: 20,
+          width: 100,
+          height: 34,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.green.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white, width: 1),
             ),
-            child: Text(
-              'P: ${_formatDistance(totalDist)}',
-              style: const TextStyle(color: Colors.white, fontSize: 9),
-              textAlign: TextAlign.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'P: ${_formatDistance(totalDist)}',
+                  style: const TextStyle(color: Colors.white, fontSize: 9),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  _formatArea(areaValue),
+                  style: const TextStyle(color: Colors.white70, fontSize: 8),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ));
@@ -336,7 +378,7 @@ class _MapScreenState extends State<MapScreen> {
       markers.add(Marker(
         point: centroid,
         width: 120,
-        height: 36,
+        height: 40,
         child: GestureDetector(
           onTap: () => _showGroupInfo(group, dist),
           child: Container(
@@ -410,6 +452,14 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showGroupInfo(ObjectGroup group, double dist) {
+    String? areaText;
+    if (group.type == 'area' && group.members != null && group.members!.length >= 3) {
+      final points = group.sortedObjects
+          .map((m) => LatLng(m.latitude, m.longitude))
+          .toList();
+      areaText = _formatArea(_computeArea(points));
+    }
+
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Padding(
@@ -431,6 +481,11 @@ class _MapScreenState extends State<MapScreen> {
             const SizedBox(height: 4),
             Text('${group.type == 'area' ? 'Área' : 'Línea'} · ${group.members?.length ?? 0} objetos',
                 style: Theme.of(context).textTheme.bodySmall),
+            if (areaText != null) ...[
+              const SizedBox(height: 4),
+              Text('Superficie: $areaText',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green)),
+            ],
           ],
         ),
       ),
@@ -489,5 +544,11 @@ class _MapScreenState extends State<MapScreen> {
     if (meters < 1) return '${(meters * 100).round()} cm';
     if (meters < 1000) return '${meters.round()} m';
     return '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
+  String _formatArea(double squareMeters) {
+    if (squareMeters < 1) return '${(squareMeters * 10000).round()} cm²';
+    if (squareMeters < 10000) return '${squareMeters.round()} m²';
+    return '${(squareMeters / 10000).toStringAsFixed(2)} ha';
   }
 }

@@ -250,27 +250,43 @@ class ARPainter extends CustomPainter {
 
   void _drawGroupARConnections(Canvas canvas, double centerY,
       Map<int, double> xPositions, Map<int, double> distances, Map<int, Color> colors) {
+    final groundY = screenSize.height * 0.78;
+
     for (final group in groups) {
       final members = group.sortedObjects;
       if (members.length < 2) continue;
 
-      final positions = <Offset>[];
+      final groundPositions = <Offset>[];
       for (final m in members) {
         final x = xPositions[m.id];
         if (x != null) {
-          positions.add(Offset(x, centerY));
+          groundPositions.add(Offset(x, groundY));
+
+          // Vertical dashed dropping line from marker to ground
+          final dashPaint = Paint()
+            ..color = Colors.white.withOpacity(0.15)
+            ..strokeWidth = 0.5;
+          final startY = centerY + 30;
+          final endY = groundY - 10;
+          for (double dy = startY; dy < endY; dy += 6) {
+            canvas.drawLine(Offset(x, dy), Offset(x, (dy + 3).clamp(0, endY)), dashPaint);
+          }
         }
       }
-      if (positions.length < 2) continue;
+      if (groundPositions.length < 2) continue;
 
       final baseColor = group.type == 'area' ? Colors.green : Colors.cyan;
 
-      if (group.type == 'area' && positions.length >= 3) {
+      if (group.type == 'area' && groundPositions.length >= 3) {
         final fillPaint = Paint()
-          ..color = baseColor.withOpacity(0.1);
-        final path = Path()..moveTo(positions[0].dx, positions[0].dy);
-        for (int i = 1; i < positions.length; i++) {
-          path.lineTo(positions[i].dx, positions[i].dy);
+          ..shader = RadialGradient(
+            colors: [baseColor.withOpacity(0.15), baseColor.withOpacity(0.02)],
+          ).createShader(
+            Rect.fromPoints(groundPositions[0], groundPositions[groundPositions.length ~/ 2]).inflate(50),
+          );
+        final path = Path()..moveTo(groundPositions[0].dx, groundPositions[0].dy);
+        for (int i = 1; i < groundPositions.length; i++) {
+          path.lineTo(groundPositions[i].dx, groundPositions[i].dy);
         }
         path.close();
         canvas.drawPath(path, fillPaint);
@@ -278,21 +294,44 @@ class ARPainter extends CustomPainter {
         canvas.drawPath(
           path,
           Paint()
-            ..color = baseColor.withOpacity(0.5)
+            ..color = baseColor.withOpacity(0.6)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2,
+            ..strokeWidth = 2.5,
         );
+
+        // "ESTÁS DENTRO" indicator if user is inside the area
+        final cx = screenSize.width / 2;
+        if (_isPointInsidePolygon(Offset(cx, groundY), groundPositions)) {
+          _drawText(
+            canvas, '● DENTRO DEL ÁREA', screenSize.width / 2, groundY + 30,
+            fontSize: 11, fontWeight: FontWeight.bold, color: baseColor.withOpacity(0.9),
+          );
+        }
       } else {
-        for (int i = 0; i < positions.length - 1; i++) {
+        for (int i = 0; i < groundPositions.length - 1; i++) {
           canvas.drawLine(
-            positions[i], positions[i + 1],
+            groundPositions[i], groundPositions[i + 1],
             Paint()
               ..color = baseColor.withOpacity(0.5)
-              ..strokeWidth = 2.5,
+              ..strokeWidth = 3,
           );
         }
       }
     }
+  }
+
+  bool _isPointInsidePolygon(Offset point, List<Offset> polygon) {
+    int intersections = 0;
+    for (int i = 0; i < polygon.length; i++) {
+      final j = (i + 1) % polygon.length;
+      if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy)) {
+        final xIntersect = polygon[j].dx +
+            (point.dy - polygon[j].dy) / (polygon[i].dy - polygon[j].dy) *
+                (polygon[i].dx - polygon[j].dx);
+        if (point.dx < xIntersect) intersections++;
+      }
+    }
+    return intersections % 2 == 1;
   }
 
   void _drawEdgeDot(Canvas canvas, double angleDiff, Color color, double distance) {
