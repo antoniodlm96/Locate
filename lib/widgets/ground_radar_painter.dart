@@ -110,27 +110,38 @@ class GroundRadarPainter extends CustomPainter {
     final maxDist = objects.map((o) => o.distance).reduce(math.max);
     final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
 
-    // === Objects: single polar coordinate system for all tilts ===
+    // === Objects: transición suave polar→lineal entre tilt 0.4 y 0.8 ===
     final Map<int, Offset> objectPositions = {};
 
     // Visibility cone narrows from 360° to 180° as tilt increases
-    final visibleCone = 180.0 + (1.0 - t) * 180.0; // 360° at t=0, 180° at t=1
+    final visibleCone = 180.0 + (1.0 - t) * 180.0;
+
+    // Blend: 0 = polar (radar), 1 = lineal (ground projection)
+    final polarBlend = ((t - 0.4) / 0.4).clamp(0.0, 1.0);
+    final radialExtent = radius * 0.88;
 
     for (final obj in objects) {
       final bearingDiff = obj.bearing - heading;
       final absDiff = bearingDiff.abs();
       final angleRad = bearingDiff * math.pi / 180;
 
-      // Smooth fade for objects outside visible cone
       final excess = (absDiff - visibleCone * 0.5) / (visibleCone * 0.5);
       final fade = (1.0 - excess * 2).clamp(0.0, 1.0);
       if (fade < 0.01) continue;
 
-      // Polar coordinates — consistent at every tilt
       final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
-      final objR = distFactor * radius * 0.88;
-      final x = centerX + objR * math.sin(angleRad);
-      final y = centerY - objR * math.cos(angleRad) * yScale;
+      final objR = distFactor * radialExtent;
+
+      // Polar: circular radar position
+      final polarX = centerX + objR * math.sin(angleRad);
+      final polarY = centerY - objR * math.cos(angleRad) * yScale;
+
+      // Linear: bearing maps to X, distance maps to Y (near=bottom, far=top)
+      final linearX = centerX + (bearingDiff / 90.0) * radialExtent * distFactor;
+      final linearY = centerY - radialExtent * (0.2 + distFactor * 0.6) * (1.0 - yScale);
+
+      final x = _lerp(polarX, linearX, polarBlend);
+      final y = _lerp(polarY, linearY, polarBlend);
 
       objectPositions[obj.object.id!] = Offset(x, y);
 
