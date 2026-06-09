@@ -9,16 +9,17 @@ import '../models/object_group.dart';
 import '../services/database_service.dart';
 import '../services/compass_service.dart';
 import '../widgets/ar_painter.dart';
+import '../widgets/ground_radar_painter.dart';
 import 'register_object_screen.dart';
 
-class _ObjectWithDistance {
+class ObjectWithDistance {
   final SavedObject object;
   final double distance;
   final double bearing;
   final Color color;
   final IconData icon;
 
-  _ObjectWithDistance({
+  ObjectWithDistance({
     required this.object,
     required this.distance,
     required this.bearing,
@@ -50,7 +51,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
   final CompassService _compassService = CompassService();
   StreamSubscription<double>? _headingSub;
   bool _initialized = false;
-  List<_ObjectWithDistance> _sortedObjects = [];
+  List<ObjectWithDistance> _sortedObjects = [];
 
   final ValueNotifier<double> _headingNotifier = ValueNotifier(0);
 
@@ -68,9 +69,8 @@ class _ARViewScreenState extends State<ARViewScreen> {
         _gz = event.z / norm;
         final rawTilt = (1.0 - _gz.abs()).clamp(0.0, 1.0);
         _smoothedTilt += (rawTilt - _smoothedTilt) * 0.06;
-        final arOpacity = ((_smoothedTilt - 0.15) / 0.45).clamp(0.0, 1.0);
-        if ((arOpacity - _tiltNotifier.value).abs() > 0.005) {
-          _tiltNotifier.value = arOpacity;
+        if ((_smoothedTilt - _tiltNotifier.value).abs() > 0.005) {
+          _tiltNotifier.value = _smoothedTilt;
         }
       }
     });
@@ -142,7 +142,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
       _sortedObjects = [];
       return;
     }
-    final list = <_ObjectWithDistance>[];
+    final list = <ObjectWithDistance>[];
     for (final obj in _objects) {
       final dist = Geolocator.distanceBetween(
         _currentPosition!.latitude, _currentPosition!.longitude,
@@ -153,7 +153,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
         obj.latitude, obj.longitude,
       );
       final typeEntry = _findTypeEntry(obj.type);
-      list.add(_ObjectWithDistance(
+      list.add(ObjectWithDistance(
         object: obj,
         distance: dist,
         bearing: bearing,
@@ -228,56 +228,71 @@ class _ARViewScreenState extends State<ARViewScreen> {
       ),
       body: Stack(
         children: [
-          if (_currentPosition != null)
-            ValueListenableBuilder<double>(
-              valueListenable: _tiltNotifier,
-              builder: (_, arOpacity, __) {
-                final radarOpacity = 1.0 - arOpacity.clamp(0.0, 1.0);
-                return Opacity(
-                  opacity: radarOpacity,
-                  child: _buildRadarView(),
-                );
-              },
-            ),
+          // Camera preview always visible when initialized
           if (_cameraController != null && _cameraController!.value.isInitialized)
-            ValueListenableBuilder<double>(
-              valueListenable: _tiltNotifier,
-              builder: (_, arOpacity, __) {
-                return Opacity(
-                  opacity: arOpacity.clamp(0.0, 1.0),
-                  child: RepaintBoundary(
-                    child: Stack(
-                      children: [
-                        CameraPreview(_cameraController!),
-                        if (_currentPosition != null)
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
-                              return ValueListenableBuilder<double>(
-                                valueListenable: _headingNotifier,
-                                builder: (_, heading, __) {
-                                  return CustomPaint(
-                                    size: Size(constraints.maxWidth, constraints.maxHeight),
-                                    painter: ARPainter(
-                                      objects: _objects,
-                                      groups: _groups,
-                                      currentPosition: _currentPosition!,
-                                      heading: heading,
-                                      fov: 180,
-                                      screenSize: Size(constraints.maxWidth, constraints.maxHeight),
-                                      topPadding: topPad,
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                      ],
+            RepaintBoundary(
+              child: Stack(
+                children: [
+                  CameraPreview(_cameraController!),
+                  // Floating AR markers
+                  if (_currentPosition != null)
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
+                        return ValueListenableBuilder<double>(
+                          valueListenable: _headingNotifier,
+                          builder: (_, heading, __) {
+                            return ValueListenableBuilder<double>(
+                              valueListenable: _tiltNotifier,
+                              builder: (_, tilt, __) {
+                                return CustomPaint(
+                                  size: Size(constraints.maxWidth, constraints.maxHeight),
+                                  painter: ARPainter(
+                                    objects: _objects,
+                                    currentPosition: _currentPosition!,
+                                    heading: heading,
+                                    tilt: tilt,
+                                    fov: 180,
+                                    screenSize: Size(constraints.maxWidth, constraints.maxHeight),
+                                    topPadding: topPad,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
                     ),
-                  ),
+                ],
+              ),
+            ),
+
+          // Ground radar on top of everything, tilts with phone
+          if (_currentPosition != null)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ValueListenableBuilder<double>(
+                  valueListenable: _headingNotifier,
+                  builder: (_, heading, __) {
+                    return ValueListenableBuilder<double>(
+                      valueListenable: _tiltNotifier,
+                      builder: (_, tilt, __) {
+                        return CustomPaint(
+                          size: Size(constraints.maxWidth, constraints.maxHeight),
+                          painter: GroundRadarPainter(
+                            objects: _sortedObjects,
+                            groups: _groups,
+                            heading: heading,
+                            tilt: tilt,
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),
+
           if (_currentPosition == null)
             const Center(
               child: Column(
@@ -292,6 +307,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                 ],
               ),
             ),
+
           Positioned(
             bottom: 0,
             left: 0,
@@ -299,31 +315,6 @@ class _ARViewScreenState extends State<ARViewScreen> {
             child: _buildBottomList(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRadarView() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0B0E1A), Color(0xFF141829)],
-        ),
-      ),
-      child: ValueListenableBuilder<double>(
-        valueListenable: _headingNotifier,
-        builder: (_, heading, __) {
-          return CustomPaint(
-            size: Size.infinite,
-            painter: RadarPainter(
-              objects: _sortedObjects,
-              groups: _groups,
-              heading: heading,
-            ),
-          );
-        },
       ),
     );
   }
@@ -444,227 +435,5 @@ class _ARViewScreenState extends State<ARViewScreen> {
         ],
       ),
     );
-  }
-}
-
-class RadarPainter extends CustomPainter {
-  final List<_ObjectWithDistance> objects;
-  final List<ObjectGroup> groups;
-  final double heading;
-  final Map<int, Offset> _objectPositions = {};
-
-  RadarPainter({required this.objects, required this.groups, required this.heading});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.45);
-    final radius = math.min(size.width, size.height) * 0.42;
-
-    // Subtle grid
-    final gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.03)
-      ..strokeWidth = 0.5;
-    for (int i = 0; i < 6; i++) {
-      final angle = i * math.pi / 3;
-      canvas.drawLine(
-        center,
-        Offset(center.dx + radius * math.cos(angle), center.dy + radius * math.sin(angle)),
-        gridPaint,
-      );
-    }
-
-    // Outer glow
-    final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [const Color(0xFF1A1A3E).withOpacity(0.25), Colors.transparent],
-      ).createShader(Rect.fromCircle(center: center, radius: radius));
-    canvas.drawCircle(center, radius, glow);
-
-    // Rings
-    final ringColors = [Colors.white.withOpacity(0.06), Colors.white.withOpacity(0.04), Colors.white.withOpacity(0.03), Colors.white.withOpacity(0.02)];
-    for (int i = 0; i < 4; i++) {
-      canvas.drawCircle(
-        center, radius * (i + 1) / 4,
-        Paint()
-          ..color = ringColors[i]
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
-    }
-
-    // Cardinal points with nicer styling
-    final cardinals = <String, double>{
-      'N': -heading,
-      'E': 90 - heading,
-      'S': 180 - heading,
-      'O': 270 - heading,
-    };
-    for (final entry in cardinals.entries) {
-      final angleRad = entry.value * math.pi / 180;
-      final lx = center.dx + (radius + 20) * math.sin(angleRad);
-      final ly = center.dy - (radius + 20) * math.cos(angleRad);
-      final isNorth = entry.key == 'N';
-      _drawText(canvas, entry.key, lx, ly,
-        fontSize: isNorth ? 19 : 15,
-        fontWeight: isNorth ? FontWeight.bold : FontWeight.w500,
-        color: isNorth ? Colors.white.withOpacity(0.9) : Colors.white.withOpacity(0.45),
-      );
-    }
-
-    // Direction indicator - sleek arrow
-    final arrowPaint = Paint()
-      ..color = Colors.white.withOpacity(0.6);
-    final arrowPath = Path()
-      ..moveTo(center.dx, center.dy - radius - 14)
-      ..lineTo(center.dx - 7, center.dy - radius + 2)
-      ..lineTo(center.dx + 7, center.dy - radius + 2)
-      ..close();
-    canvas.drawPath(arrowPath, arrowPaint);
-    canvas.drawCircle(center, 2.5, Paint()..color = Colors.white.withOpacity(0.5));
-
-    if (objects.isEmpty) {
-      _drawText(canvas, 'Sin objetos cerca', center.dx, center.dy + 35,
-          fontSize: 15, color: Colors.white30);
-      return;
-    }
-
-    final maxDist = objects.map((o) => o.distance).reduce(math.max);
-    final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
-
-    for (final obj in objects) {
-      final angleDiff = obj.bearing - heading;
-      final angleRad = angleDiff * math.pi / 180;
-
-      final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
-      final objR = distFactor * radius * 0.88;
-      final ox = center.dx + objR * math.sin(angleRad);
-      final oy = center.dy - objR * math.cos(angleRad);
-
-      _objectPositions[obj.object.id!] = Offset(ox, oy);
-
-      // Glow ring
-      canvas.drawCircle(
-        Offset(ox, oy), 12,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [obj.color.withOpacity(0.3), obj.color.withOpacity(0.0)],
-          ).createShader(Rect.fromCircle(center: Offset(ox, oy), radius: 12)),
-      );
-
-      // Main dot
-      canvas.drawCircle(Offset(ox, oy), 6, Paint()..color = obj.color);
-      // White ring
-      canvas.drawCircle(Offset(ox, oy), 6, Paint()
-        ..color = Colors.white.withOpacity(0.35)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5);
-
-      // Labels
-      final labelOffset = (objR < radius * 0.3) ? const Offset(14, -12) : const Offset(12, -10);
-      _drawText(canvas, obj.object.name, ox + labelOffset.dx, oy + labelOffset.dy,
-          fontSize: 12, fontWeight: FontWeight.w600, color: obj.color);
-      _drawText(canvas, formatDistance(obj.distance), ox + labelOffset.dx, oy + labelOffset.dy + 15,
-          fontSize: 10, color: Colors.white60);
-    }
-
-    _drawGroupsOnRadar(canvas, center, radius, radarMax);
-  }
-
-  void _drawGroupsOnRadar(Canvas canvas, Offset center, double radius, double radarMax) {
-    for (final group in groups) {
-      final members = group.sortedObjects;
-      if (members.length < 2) continue;
-
-      final positions = <Offset>[];
-      for (final m in members) {
-        final id = m.id;
-        if (id == null) continue;
-        if (_objectPositions.containsKey(id)) {
-          positions.add(_objectPositions[id]!);
-        } else {
-          final distObj = objects.cast<_ObjectWithDistance?>().firstWhere(
-            (o) => o!.object.id == id,
-            orElse: () => null,
-          );
-          if (distObj != null) {
-            final angleDiff = distObj.bearing - heading;
-            final angleRad = angleDiff * math.pi / 180;
-            final distFactor = (distObj.distance / radarMax).clamp(0.0, 1.0);
-            final objR = distFactor * radius * 0.88;
-            positions.add(Offset(
-              center.dx + objR * math.sin(angleRad),
-              center.dy - objR * math.cos(angleRad),
-            ));
-          }
-        }
-      }
-      if (positions.length < 2) continue;
-
-      final baseColor = group.type == 'area' ? Colors.green : Colors.cyan;
-
-      if (group.type == 'area' && positions.length >= 3) {
-        final fillPaint = Paint()..color = baseColor.withOpacity(0.08);
-        final path = Path()..moveTo(positions[0].dx, positions[0].dy);
-        for (int i = 1; i < positions.length; i++) {
-          path.lineTo(positions[i].dx, positions[i].dy);
-        }
-        path.close();
-        canvas.drawPath(path, fillPaint);
-        canvas.drawPath(path, Paint()
-          ..color = baseColor.withOpacity(0.4)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2);
-      } else {
-        for (int i = 0; i < positions.length - 1; i++) {
-          canvas.drawLine(positions[i], positions[i + 1], Paint()
-            ..color = baseColor.withOpacity(0.35)
-            ..strokeWidth = 2);
-
-          final mid = Offset(
-            (positions[i].dx + positions[i + 1].dx) / 2,
-            (positions[i].dy + positions[i + 1].dy) / 2,
-          );
-          final segDist = Geolocator.distanceBetween(
-            group.sortedObjects[i].latitude, group.sortedObjects[i].longitude,
-            group.sortedObjects[i + 1].latitude, group.sortedObjects[i + 1].longitude,
-          );
-          _drawText(canvas, formatDistance(segDist), mid.dx, mid.dy - 8,
-              fontSize: 9, color: Colors.white.withOpacity(0.5));
-        }
-      }
-
-      double cx = 0, cy = 0;
-      for (final p in positions) { cx += p.dx; cy += p.dy; }
-      cx /= positions.length;
-      cy /= positions.length;
-      _drawText(canvas, group.name, cx, cy,
-          fontSize: 10, fontWeight: FontWeight.bold,
-          color: baseColor.withOpacity(0.8));
-    }
-  }
-
-  void _drawText(Canvas canvas, String text, double x, double y,
-      {double fontSize = 12, FontWeight fontWeight = FontWeight.normal, Color color = Colors.white}) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          shadows: const [Shadow(blurRadius: 8, color: Color(0xCC000000))],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    tp.layout();
-    tp.paint(canvas, Offset(x - tp.width / 2, y));
-  }
-
-  @override
-  bool shouldRepaint(RadarPainter oldDelegate) {
-    return (oldDelegate.heading - heading).abs() > 0.5 ||
-        oldDelegate.objects != objects ||
-        oldDelegate.groups != groups;
   }
 }
