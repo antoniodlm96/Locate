@@ -25,27 +25,26 @@ class GroundRadarPainter extends CustomPainter {
     final centerY = _lerp(size.height * 0.45, size.height * 0.82, t);
     final radius = math.min(size.width, size.height) * 0.42;
 
-    // Background: fully opaque at t=0, fades to transparent as t increases
-    final bgFade = ((t - 0.2) / 0.5).clamp(0.0, 1.0);
+    // Background fades as phone tilts
+    final bgFade = ((t - 0.15) / 0.5).clamp(0.0, 1.0);
     final bgOpacity = 1.0 - bgFade;
     if (bgOpacity > 0.01) {
       canvas.drawRect(
         Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF0B0E1A).withOpacity((0.98 * bgOpacity).clamp(0.0, 1.0)),
-              const Color(0xFF0B0E1A).withOpacity((0.92 * bgOpacity).clamp(0.0, 1.0)),
-              const Color(0xFF0B0E1A).withOpacity((0.7 * bgOpacity).clamp(0.0, 1.0)),
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+        Paint()..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF0B0E1A).withOpacity((0.98 * bgOpacity).clamp(0.0, 1.0)),
+            const Color(0xFF0B0E1A).withOpacity((0.90 * bgOpacity).clamp(0.0, 1.0)),
+            const Color(0xFF0B0E1A).withOpacity((0.6 * bgOpacity).clamp(0.0, 1.0)),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
       );
     }
 
-    // === Rings (always visible, strong) ===
+    // === Rings (always opaque, compressed by yScale) ===
     final nSteps = 48;
     for (int ring = 1; ring <= 4; ring++) {
       final r = radius * ring / 4;
@@ -54,21 +53,14 @@ class GroundRadarPainter extends CustomPainter {
         final angle = 2 * math.pi * i / nSteps;
         final px = centerX + r * math.sin(angle);
         final py = centerY - r * math.cos(angle) * yScale;
-        if (i == 0) {
-          path.moveTo(px, py);
-        } else {
-          path.lineTo(px, py);
-        }
+        (i == 0 ? path.moveTo : path.lineTo)(px, py);
       }
       path.close();
-      final ringAlpha = (ring == 1 ? 0.15 : (ring == 2 ? 0.11 : (ring == 3 ? 0.08 : 0.05)));
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white.withOpacity(ringAlpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 - ring * 0.2,
-      );
+      final alpha = (5 - ring) * 0.03;
+      canvas.drawPath(path, Paint()
+        ..color = Colors.white.withOpacity(alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5 - ring * 0.2);
     }
 
     // Grid lines
@@ -77,13 +69,11 @@ class GroundRadarPainter extends CustomPainter {
       canvas.drawLine(
         Offset(centerX, centerY),
         Offset(centerX + radius * math.sin(angle), centerY - radius * math.cos(angle) * yScale),
-        Paint()
-          ..color = Colors.white.withOpacity(0.04)
-          ..strokeWidth = 0.5,
+        Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 0.5,
       );
     }
 
-    // === Cardinal points (always visible, strong) ===
+    // === Cardinal points ===
     final cardinals = <String, double>{
       'N': -heading, 'E': 90 - heading, 'S': 180 - heading, 'O': 270 - heading,
     };
@@ -100,14 +90,15 @@ class GroundRadarPainter extends CustomPainter {
     }
 
     // Direction arrow
-    final arrowPaint = Paint()
-      ..color = Colors.white.withOpacity(0.6);
-    final arrowPath = Path()
-      ..moveTo(centerX, centerY - radius * yScale - 14)
-      ..lineTo(centerX - 7, centerY - radius * yScale + 2)
-      ..lineTo(centerX + 7, centerY - radius * yScale + 2)
-      ..close();
-    canvas.drawPath(arrowPath, arrowPaint);
+    final arrowP = Offset(centerX, centerY - radius * yScale - 14);
+    canvas.drawPath(
+      Path()
+        ..moveTo(arrowP.dx, arrowP.dy)
+        ..lineTo(arrowP.dx - 7, arrowP.dy + 16)
+        ..lineTo(arrowP.dx + 7, arrowP.dy + 16)
+        ..close(),
+      Paint()..color = Colors.white.withOpacity(0.6),
+    );
     canvas.drawCircle(Offset(centerX, centerY), 2.5, Paint()..color = Colors.white.withOpacity(0.6));
 
     if (objects.isEmpty) {
@@ -119,120 +110,93 @@ class GroundRadarPainter extends CustomPainter {
     final maxDist = objects.map((o) => o.distance).reduce(math.max);
     final radarMax = math.max(50.0, math.min(maxDist * 1.3, 500.0));
 
-    // === Objects ===
-    final Map<int, Offset> objectGroundPositions = {};
-    const halfFov = 85.0;
+    // === Objects: single polar coordinate system for all tilts ===
+    final Map<int, Offset> objectPositions = {};
+
+    // Visibility cone narrows from 360° to 180° as tilt increases
+    final visibleCone = 180.0 + (1.0 - t) * 180.0; // 360° at t=0, 180° at t=1
 
     for (final obj in objects) {
       final bearingDiff = obj.bearing - heading;
+      final absDiff = bearingDiff.abs();
       final angleRad = bearingDiff * math.pi / 180;
 
-      // Polar (radar) position
+      // Smooth fade for objects outside visible cone
+      final excess = (absDiff - visibleCone * 0.5) / (visibleCone * 0.5);
+      final fade = (1.0 - excess * 2).clamp(0.0, 1.0);
+      if (fade < 0.01) continue;
+
+      // Polar coordinates — consistent at every tilt
       final distFactor = (obj.distance / radarMax).clamp(0.0, 1.0);
       final objR = distFactor * radius * 0.88;
-      final polarX = centerX + objR * math.sin(angleRad);
-      final polarY = centerY - objR * math.cos(angleRad) * yScale;
+      final x = centerX + objR * math.sin(angleRad);
+      final y = centerY - objR * math.cos(angleRad) * yScale;
 
-      // Ground perspective position (used at high tilt)
-      final groundX = centerX + (bearingDiff / halfFov) * centerX;
-      final groundY = centerY;
+      objectPositions[obj.object.id!] = Offset(x, y);
 
-      // Behind-fade: objects with |bearingDiff| > 90° fade out as tilt increases
-      final absDiff = bearingDiff.abs();
-      double behindFade = 1.0;
-      if (absDiff > 90 && t > 0.3) {
-        behindFade = 1.0 - ((t - 0.3) / 0.5).clamp(0.0, 1.0);
-      } else if (absDiff > halfFov && t > 0.3) {
-        behindFade = 1.0 - ((t - 0.3) / 0.5 * ((absDiff - halfFov) / (90 - halfFov))).clamp(0.0, 1.0);
-      }
-
-      if (behindFade < 0.01) continue;
-      if (absDiff > halfFov && t > 0.8) continue;
-
-      // Blend between radar and ground positions based on tilt
-      final blend = (t / 0.7).clamp(0.0, 1.0);
-      final ox = blend * groundX + (1 - blend) * polarX;
-      final oy = polarY;
-
-      objectGroundPositions[obj.object.id!] = Offset(ox, oy);
-
-      // Strong object dot
-      final dotSize = _lerp(6.0, 5.0, blend);
-      canvas.drawCircle(Offset(ox, oy), dotSize, Paint()..color = obj.color.withOpacity(behindFade));
-      canvas.drawCircle(Offset(ox, oy), dotSize, Paint()
-        ..color = Colors.white.withOpacity(0.35 * behindFade)
+      // Dot
+      canvas.drawCircle(Offset(x, y), 6, Paint()..color = obj.color.withOpacity(fade));
+      canvas.drawCircle(Offset(x, y), 6, Paint()
+        ..color = Colors.white.withOpacity(0.35 * fade)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5);
 
-      // Labels
-      if (behindFade > 0.5 || t < 0.5) {
-        final labelOpacity = behindFade;
-        final labelOffset = (polarY < centerY) ? const Offset(12, -10) : const Offset(12, 10);
-        _drawText(canvas, obj.object.name, ox + labelOffset.dx, oy + labelOffset.dy,
-            fontSize: 12, fontWeight: FontWeight.w600, color: obj.color.withOpacity(0.95 * labelOpacity));
-        _drawText(canvas, formatDistance(obj.distance), ox + labelOffset.dx, oy + labelOffset.dy + 15,
-            fontSize: 10, color: Colors.white.withOpacity(0.7 * labelOpacity));
+      // Label
+      if (t < 0.6) {
+        final off = (y < centerY) ? const Offset(12, -10) : const Offset(12, 10);
+        _drawText(canvas, obj.object.name, x + off.dx, y + off.dy,
+            fontSize: 12, fontWeight: FontWeight.w600, color: obj.color.withOpacity(0.95 * fade));
+        _drawText(canvas, formatDistance(obj.distance), x + off.dx, y + off.dy + 15,
+            fontSize: 10, color: Colors.white.withOpacity(0.7 * fade));
       } else {
-        // Compact label for ground view
-        _drawText(canvas, obj.object.name, ox, oy - 16,
-            fontSize: 10, fontWeight: FontWeight.w600, color: obj.color.withOpacity(0.95));
-        _drawText(canvas, formatDistance(obj.distance), ox, oy - 4,
-            fontSize: 9, color: Colors.white70);
+        _drawText(canvas, obj.object.name, x, y - 14,
+            fontSize: 10, fontWeight: FontWeight.w600, color: obj.color.withOpacity(0.95 * fade));
+        _drawText(canvas, formatDistance(obj.distance), x, y,
+            fontSize: 9, color: Colors.white.withOpacity(0.7 * fade));
       }
     }
 
-    // === Groups (lines/areas on ground) ===
+    // === Groups ===
     for (final group in groups) {
       final members = group.sortedObjects;
       if (members.length < 2) continue;
 
-      final positions = <Offset>[];
+      final pts = <Offset>[];
       for (final m in members) {
         final id = m.id;
         if (id == null) continue;
-        if (objectGroundPositions.containsKey(id)) {
-          positions.add(objectGroundPositions[id]!);
-        }
+        final pos = objectPositions[id];
+        if (pos != null) pts.add(pos);
       }
-      if (positions.length < 2) continue;
+      if (pts.length < 2) continue;
 
       final baseColor = group.type == 'area' ? Colors.green : Colors.cyan;
 
-      if (group.type == 'area' && positions.length >= 3) {
-        final fillPaint = Paint()
+      if (group.type == 'area' && pts.length >= 3) {
+        final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+        for (int i = 1; i < pts.length; i++) path.lineTo(pts[i].dx, pts[i].dy);
+        path.close();
+        canvas.drawPath(path, Paint()
           ..shader = RadialGradient(
             colors: [baseColor.withOpacity(0.12), baseColor.withOpacity(0.02)],
-          ).createShader(
-            Rect.fromPoints(positions[0], positions[positions.length ~/ 2]).inflate(50),
-          );
-        final path = Path()..moveTo(positions[0].dx, positions[0].dy);
-        for (int i = 1; i < positions.length; i++) {
-          path.lineTo(positions[i].dx, positions[i].dy);
-        }
-        path.close();
-        canvas.drawPath(path, fillPaint);
+          ).createShader(Rect.fromPoints(pts[0], pts[pts.length ~/ 2]).inflate(50)));
         canvas.drawPath(path, Paint()
           ..color = baseColor.withOpacity(0.6)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3);
 
-        if (t > 0.3) {
-          if (_isPointInsidePolygon(Offset(centerX, centerY), positions)) {
-            _drawText(canvas, '● DENTRO DEL ÁREA', centerX, centerY - 30,
-                fontSize: 11, fontWeight: FontWeight.bold, color: baseColor.withOpacity(0.9));
-          }
+        if (t > 0.3 && _isPointInsidePolygon(Offset(centerX, centerY), pts)) {
+          _drawText(canvas, '● DENTRO DEL ÁREA', centerX, centerY - 28,
+              fontSize: 11, fontWeight: FontWeight.bold, color: baseColor.withOpacity(0.9));
         }
       } else {
-        for (int i = 0; i < positions.length - 1; i++) {
-          canvas.drawLine(positions[i], positions[i + 1], Paint()
+        for (int i = 0; i < pts.length - 1; i++) {
+          canvas.drawLine(pts[i], pts[i + 1], Paint()
             ..color = baseColor.withOpacity(0.55)
             ..strokeWidth = 3);
 
           if (t < 0.7) {
-            final mid = Offset(
-              (positions[i].dx + positions[i + 1].dx) / 2,
-              (positions[i].dy + positions[i + 1].dy) / 2,
-            );
+            final mid = (pts[i] + pts[i + 1]) / 2;
             final segDist = Geolocator.distanceBetween(
               group.sortedObjects[i].latitude, group.sortedObjects[i].longitude,
               group.sortedObjects[i + 1].latitude, group.sortedObjects[i + 1].longitude,
@@ -244,12 +208,9 @@ class GroundRadarPainter extends CustomPainter {
       }
 
       double cx = 0, cy = 0;
-      for (final p in positions) { cx += p.dx; cy += p.dy; }
-      cx /= positions.length;
-      cy /= positions.length;
-      _drawText(canvas, group.name, cx, cy,
-          fontSize: 10, fontWeight: FontWeight.bold,
-          color: baseColor.withOpacity(0.85));
+      for (final p in pts) { cx += p.dx; cy += p.dy; }
+      _drawText(canvas, group.name, cx / pts.length, cy / pts.length,
+          fontSize: 10, fontWeight: FontWeight.bold, color: baseColor.withOpacity(0.85));
     }
   }
 
@@ -260,10 +221,9 @@ class GroundRadarPainter extends CustomPainter {
     for (int i = 0; i < polygon.length; i++) {
       final j = (i + 1) % polygon.length;
       if ((polygon[i].dy > point.dy) != (polygon[j].dy > point.dy)) {
-        final xIntersect = polygon[j].dx +
-            (point.dy - polygon[j].dy) / (polygon[i].dy - polygon[j].dy) *
-                (polygon[i].dx - polygon[j].dx);
-        if (point.dx < xIntersect) intersections++;
+        final xInt = polygon[j].dx + (point.dy - polygon[j].dy) /
+            (polygon[i].dy - polygon[j].dy) * (polygon[i].dx - polygon[j].dx);
+        if (point.dx < xInt) intersections++;
       }
     }
     return intersections % 2 == 1;
@@ -275,9 +235,7 @@ class GroundRadarPainter extends CustomPainter {
       text: TextSpan(
         text: text,
         style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
+          color: color, fontSize: fontSize, fontWeight: fontWeight,
           shadows: const [Shadow(blurRadius: 8, color: Color(0xCC000000))],
         ),
       ),
